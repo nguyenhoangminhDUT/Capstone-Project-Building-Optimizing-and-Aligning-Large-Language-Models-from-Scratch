@@ -56,8 +56,8 @@ class RoPE(nn.Module):
     def forward(self, x: torch.Tensor, start_pos: int = 0) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute cos and sin positional tensors for sequence length of x starting from start_pos."""
         seq_len = x.shape[-2] if x.ndim >= 2 else x.shape[0]
-        # CRITICAL: Khi giải mã autoregressive cùng KV Cache, token mới sinh tại vị trí t cần được
-        # áp dụng RoPE với vị trí t (start_pos = t), thay vì luôn tính từ vị trí 0.
+        # CRITICAL: Khi giải mã với KV Cache, vị trí RoPE phải là vị trí tuyệt đối trong chuỗi
+        # (tính từ đầu prompt đến token hiện tại, start_pos = offset), không phải vị trí 0.
         t = torch.arange(start_pos, start_pos + seq_len, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
         # freqs có shape (seq_len, head_dim // 2)
         freqs = torch.outer(t, self.inv_freq)

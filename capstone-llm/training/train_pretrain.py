@@ -1,23 +1,23 @@
-"""Pre-training loop with AdamW, Cosine LR scheduling, mixed precision, and gradient clipping."""
+"""Pre-training script for pure PyTorch LLM with AdamW, Cosine LR, Mixed Precision, and Grad Accumulation."""
 
+import argparse
 import math
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-# Đảm bảo import được các module từ thư mục capstone-llm
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from model.transformer import Transformer
-from training.dataset import PretrainDataset
+from training.dataset import TokenDataset, load_and_tokenize
 
 
 def get_lr(
@@ -27,7 +27,7 @@ def get_lr(
     max_lr: float = 3e-4,
     min_lr: float = 3e-5,
 ) -> float:
-    """Compute learning rate with linear warmup and cosine decay."""
+    """Compute learning rate using linear warmup and cosine decay."""
     if step < warmup_steps:
         return max_lr * (step + 1) / max(1, warmup_steps)
     if step > max_steps:
@@ -66,109 +66,182 @@ def configure_optimizers(
     return optimizer
 
 
-def train(
-    model: Transformer,
-    dataset: PretrainDataset,
-    batch_size: int = 4,
-    max_steps: int = 10,
-    warmup_steps: int = 2,
-    max_lr: float = 3e-4,
-    min_lr: float = 3e-5,
-    grad_clip: float = 1.0,
-    device: Optional[str] = None,
-    save_checkpoint_path: Optional[str] = None,
-) -> list[float]:
-    """Run pre-training loop with mixed precision, cosine LR decay, and gradient clipping."""
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments for pre-training."""
+    parser = argparse.ArgumentParser(description="Pre-train custom PyTorch LLM")
+    parser.add_argument("--data", type=str, default="data/tinystories_sample.txt", help="Path to text corpus")
+    parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Path to tokenizer JSON")
+    parser.add_argument("--out_dir", type=str, default="checkpoints", help="Output directory for checkpoints")
+    parser.add_argument("--max_steps", type=int, default=1000, help="Total training steps")
+    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per step")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Maximum learning rate")
+    parser.add_argument("--warmup_steps", type=int, default=100, help="Linear warmup steps")
+    parser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation steps")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"),
+        help="Device to use for training (cuda, mps, cpu)",
+    )
+    return parser.parse_args()
 
-    device_type = "cuda" if "cuda" in device else "cpu"
-    model = model.to(device)
-    model.train()
 
-    optimizer = configure_optimizers(model, learning_rate=max_lr, device_type=device_type)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+def main() -> None:
+    """Main execution function for pre-training loop."""
+    args = parse_args()
+
+    # Tạo thư mục lưu checkpoint
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    device = torch.device(args.device)
+    device_type = "cuda" if "cuda" in args.device else "cpu"
+    block_size = 512
+
+    print(f"Device: {device} | Micro Batch Size: {args.batch_size} | Grad Accum: {args.grad_accum}")
+    print(f"Effective Batch Size: {args.batch_size * args.grad_accum} | Max Steps: {args.max_steps}")
+
+    # 1. Nạp và tokenize dữ liệu
+    data_path = Path(args.data)
+    tokenizer_path = Path(args.tokenizer)
+
+    # Dự phòng đường dẫn trong thư mục capstone-llm nếu chạy từ root
+    if not data_path.exists() and (REPO_ROOT / data_path).exists():
+        data_path = REPO_ROOT / data_path
+    if not tokenizer_path.exists() and (REPO_ROOT / tokenizer_path).exists():
+        tokenizer_path = REPO_ROOT / tokenizer_path
+
+    if not data_path.exists() or not tokenizer_path.exists():
+        print("Tạo dữ liệu ngẫu nhiên cho smoke test do chưa tìm thấy file dữ liệu thật...")
+        token_ids = np.random.randint(0, 12000, size=20000, dtype=np.int64)
+    else:
+        print(f"Tokenizing dữ liệu từ {data_path}...")
+        token_ids = load_and_tokenize(str(data_path), str(tokenizer_path))
+        if len(token_ids) <= block_size:
+            print("Cảnh báo: Dữ liệu quá ngắn, tự động nhân bản dữ liệu để đủ huấn luyện...")
+            multiplier = (block_size * 10 // max(1, len(token_ids))) + 1
+            token_ids = np.tile(token_ids, multiplier)
+
+    dataset = TokenDataset(tokens=token_ids, block_size=block_size)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     data_iter = iter(dataloader)
 
-    # Mixed precision setup: bfloat16 cho RTX 3060, float16 cho Colab T4
+    # 2. Khởi tạo mô hình Transformer theo đúng spec
+    model = Transformer(
+        vocab_size=12000,
+        d_model=384,
+        n_layers=6,
+        n_heads=8,
+        d_ff=1024,
+        max_seq_len=block_size,
+        dropout=0.0,
+    ).to(device)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Mô hình đã khởi tạo: {total_params:,} tham số")
+
+    # 3. Khởi tạo Optimizer và Mixed Precision
+    optimizer = configure_optimizers(
+        model,
+        weight_decay=0.1,
+        learning_rate=args.lr,
+        betas=(0.9, 0.95),
+        device_type=device_type,
+    )
+
+    # Thiết lập mixed precision: bfloat16 cho GPU Ampere+ (RTX 3060), float16 cho Colab T4
     amp_dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
     use_amp = (device_type == "cuda")
     scaler = torch.amp.GradScaler(device=device_type, enabled=(use_amp and amp_dtype == torch.float16))
 
-    losses = []
-    for step in range(max_steps):
+    try:
+        model.train()
+        step = 0
+        running_tokens = 0
         t0 = time.time()
-        try:
-            x, y = next(data_iter)
-        except StopIteration:
-            data_iter = iter(dataloader)
-            x, y = next(data_iter)
 
-        x, y = x.to(device), y.to(device)
+        while step < args.max_steps:
+            optimizer.zero_grad(set_to_none=True)
+            accum_loss = 0.0
 
-        # Cập nhật learning rate theo cosine schedule
-        lr = get_lr(step, warmup_steps=warmup_steps, max_steps=max_steps, max_lr=max_lr, min_lr=min_lr)
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
+            # Cập nhật learning rate theo cosine schedule
+            current_lr = get_lr(step, args.warmup_steps, args.max_steps, args.lr, min_lr=args.lr * 0.1)
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = current_lr
 
-        optimizer.zero_grad(set_to_none=True)
+            # Gradient Accumulation Loop
+            for _ in range(args.grad_accum):
+                try:
+                    x, y = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(dataloader)
+                    x, y = next(data_iter)
 
-        with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
-            logits = model(x)
-            # CRITICAL: PretrainDataset đã chuẩn bị sẵn target y là chuỗi dịch phải 1 token
-            # nên loss được tính trực tiếp mà không cần shift thêm một lần nữa.
-            loss = F.cross_entropy(logits.view(-1, model.vocab_size), y.view(-1))
+                x, y = x.to(device), y.to(device)
 
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
-        scaler.step(optimizer)
-        scaler.update()
+                # CRITICAL: Về việc tính cross_entropy trong hoặc ngoài autocast:
+                # Với fp16, dải biểu diễn số mũ hạn chế (tối đa ~65504). Nếu logits lớn, hàm Softmax
+                # trong cross_entropy dễ bị tràn số (overflow) sinh ra NaN loss.
+                # Vì vậy, khi chạy fp16, ta ép kiểu logits về float32 (logits.float()) trước khi tính loss
+                # để đảm bảo ổn định số học (numerical stability).
+                # Với bf16 (trên RTX 3060+), dải số mũ tương đương float32 (8-bit exponent) nên hoàn toàn
+                # không lo tràn số.
+                with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
+                    logits = model(x)
+                    loss = F.cross_entropy(logits.float().view(-1, model.vocab_size), y.view(-1))
+                    # Chia loss cho grad_accum để scale gradient trung bình chính xác
+                    loss = loss / args.grad_accum
 
-        step_loss = loss.item()
-        losses.append(step_loss)
-        dt = time.time() - t0
-        tok_per_sec = (batch_size * dataset.seq_len) / dt if dt > 0 else 0
+                accum_loss += loss.item() * args.grad_accum
+                scaler.scale(loss).backward()
+                running_tokens += args.batch_size * block_size
 
-        print(f"Step {step + 1:2d}/{max_steps} | Loss: {step_loss:.4f} | LR: {lr:.2e} | Speed: {tok_per_sec:.1f} tok/s")
+            # Gradient clipping 1.0
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
 
-    if save_checkpoint_path:
-        out_dir = Path(save_checkpoint_path).parent
-        out_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(model.state_dict(), save_checkpoint_path)
-        print(f"Model checkpoint saved to {save_checkpoint_path}")
+            step += 1
 
-    return losses
+            # Log mỗi 50 step (hoặc step đầu tiên và step cuối cùng)
+            if step % 50 == 0 or step == 1 or step == args.max_steps:
+                elapsed = time.time() - t0
+                tok_per_sec = running_tokens / elapsed if elapsed > 0 else 0
+                print(
+                    f"Step {step:5d}/{args.max_steps} | Loss: {accum_loss:.4f} | "
+                    f"LR: {current_lr:.2e} | Speed: {tok_per_sec:.1f} tok/s"
+                )
+                running_tokens = 0
+                t0 = time.time()
+
+            # Lưu checkpoint mỗi 1000 step
+            if step % 1000 == 0 or step == args.max_steps:
+                ckpt_path = out_dir / f"checkpoint_step_{step}.pt"
+                torch.save(
+                    {
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "loss": accum_loss,
+                        "lr": current_lr,
+                    },
+                    ckpt_path,
+                )
+                print(f"[Checkpoint] Đã lưu mô hình tại {ckpt_path}")
+
+        print("Huấn luyện hoàn thành xuất sắc!")
+
+    except torch.cuda.OutOfMemoryError as oom_err:
+        print("\n" + "=" * 70)
+        print("LỖI: torch.cuda.OutOfMemoryError - GPU bị tràn bộ nhớ VRAM!")
+        print(f"GỢI Ý KHẮC PHỤC:")
+        print(f"1. Giảm micro batch size: hạ --batch_size (ví dụ từ {args.batch_size} xuống {max(1, args.batch_size // 2)}).")
+        print(f"2. Tăng --grad_accum (ví dụ từ {args.grad_accum} lên {args.grad_accum * 2}) để giữ nguyên effective batch size.")
+        print(f"3. Đảm bảo đang sử dụng mixed precision (bf16/fp16).")
+        print("=" * 70 + "\n")
+        raise oom_err
 
 
 if __name__ == "__main__":
-    # Smoke test: Khởi tạo mô hình nhỏ và chạy 3 step huấn luyện thử
-    seq_len = 64
-    vocab_size = 1000
-
-    tiny_model = Transformer(
-        vocab_size=vocab_size,
-        d_model=64,
-        n_layers=2,
-        n_heads=4,
-        d_ff=128,
-        max_seq_len=seq_len,
-    )
-
-    # Tạo dữ liệu ngẫu nhiên gồm 1000 tokens
-    dummy_tokens = np.random.randint(0, vocab_size, size=1000, dtype=np.int64)
-    dummy_dataset = PretrainDataset(tokens=dummy_tokens, seq_len=seq_len)
-
-    print("Running train_pretrain smoke test (3 steps)...")
-    losses = train(
-        model=tiny_model,
-        dataset=dummy_dataset,
-        batch_size=2,
-        max_steps=3,
-        warmup_steps=1,
-    )
-
-    assert len(losses) == 3, "Số bước train không khớp!"
-    assert all(not math.isnan(l) and not math.isinf(l) for l in losses), "Loss bị NaN hoặc Inf!"
-    print("train_pretrain smoke test passed successfully!")
-
+    main()

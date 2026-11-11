@@ -1,7 +1,6 @@
 """Autoregressive Transformer Decoder-Only LLM."""
 
 import math
-from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,22 +40,9 @@ class Block(nn.Module):
         self.norm2 = RMSNorm(d_model=d_model, eps=eps)
         self.ffn = SwiGLU(d_model=d_model, d_ff=d_ff)
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        rope: RoPE,
-        kv_cache: Optional[object] = None,
-        layer_idx: int = 0,
-        start_pos: int = 0,
-    ) -> torch.Tensor:
-        # Pre-norm: x = x + attn(norm1(x), rope, kv_cache); x = x + ffn(norm2(x))
-        x = x + self.attn(
-            self.norm1(x),
-            rope=rope,
-            kv_cache=kv_cache,
-            layer_idx=layer_idx,
-            start_pos=start_pos,
-        )
+    def forward(self, x: torch.Tensor, rope: RoPE) -> torch.Tensor:
+        # Pre-norm: x = x + attn(norm1(x), rope); x = x + ffn(norm2(x))
+        x = x + self.attn(self.norm1(x), rope=rope)
         x = x + self.ffn(self.norm2(x))
         return x
 
@@ -118,23 +104,12 @@ class Transformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        start_pos: int = 0,
-        kv_cache: Optional[object] = None,
-    ) -> torch.Tensor:
+    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         """Forward pass mapping input token IDs to next-token logits (B, T, vocab_size)."""
         x = self.embedding(input_ids)  # (B, T, d_model)
 
-        for layer_idx, layer in enumerate(self.layers):
-            x = layer(
-                x,
-                rope=self.rope,
-                kv_cache=kv_cache,
-                layer_idx=layer_idx,
-                start_pos=start_pos,
-            )
+        for layer in self.layers:
+            x = layer(x, rope=self.rope)
 
         x = self.final_norm(x)
         logits = self.lm_head(x)  # (B, T, vocab_size)

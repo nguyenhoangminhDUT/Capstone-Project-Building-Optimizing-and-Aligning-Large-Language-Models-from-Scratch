@@ -1,91 +1,115 @@
-"""Static Pre-allocated Key-Value Cache for Fast Autoregressive Decoding."""
+"""Static Pre-allocated Key-Value Cache for Autoregressive Generation."""
 
+import sys
+from pathlib import Path
 from typing import Tuple
 import torch
-import torch.nn as nn
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from model.attention import CausalSelfAttention
+from model.rope import RoPE
 
 
 class KVCache:
-    """Pre-allocated static KV cache storing key and value tensors across all decoder layers."""
+    """Pre-allocated static Key-Value Cache for efficient single-layer inference."""
 
     def __init__(
         self,
-        n_layers: int,
         batch_size: int,
         n_heads: int,
         head_dim: int,
-        max_seq_len: int = 512,
-        device: torch.device = torch.device("cpu"),
+        max_len: int,
+        device: torch.device,
         dtype: torch.dtype = torch.float32,
     ) -> None:
-        self.n_layers = n_layers
         self.batch_size = batch_size
         self.n_heads = n_heads
         self.head_dim = head_dim
-        self.max_seq_len = max_seq_len
+        self.max_len = max_len
+        self.device = device
+        self.dtype = dtype
 
-        # CRITICAL: Cấp phát trước bộ đệm tĩnh cho toàn bộ n_layers để tránh re-allocate bộ nhớ GPU
-        # mỗi bước sinh token, giúp giảm tối đa độ trễ (latency) khi autoregressive decoding.
-        cache_shape = (batch_size, n_heads, max_seq_len, head_dim)
-        self.k_cache = [torch.zeros(cache_shape, dtype=dtype, device=device) for _ in range(n_layers)]
-        self.v_cache = [torch.zeros(cache_shape, dtype=dtype, device=device) for _ in range(n_layers)]
+        # CRITICAL: Tiền cấp phát tensor cố định max_len thay vì dùng torch.cat() sau mỗi token.
+        # Nếu dùng torch.cat(), mỗi bước sinh token sẽ phải cấp phát một vùng nhớ mới và sao chép
+        # toàn bộ lịch sử KV trước đó, dẫn đến độ phức tạp O(n^2) bộ nhớ và thời gian (memory allocation overhead).
+        cache_shape = (batch_size, n_heads, max_len, head_dim)
+        self.k_cache = torch.zeros(cache_shape, dtype=dtype, device=device)
+        self.v_cache = torch.zeros(cache_shape, dtype=dtype, device=device)
+        self.current_len: int = 0
 
-    def update(
+    def append(
         self,
-        layer_idx: int,
-        k_val: torch.Tensor,
-        v_val: torch.Tensor,
-        start_pos: int,
+        new_k: torch.Tensor,
+        new_v: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Insert new key/value representations and return the active sequence up to current position."""
-        seq_len = k_val.shape[-2]
-        end_pos = start_pos + seq_len
+        """Write new key and value representations into cache at current_len and return active window."""
+        seq_len = new_k.shape[-2]
+        end_pos = self.current_len + seq_len
 
-        if end_pos > self.max_seq_len:
-            raise ValueError(f"Tổng số token ({end_pos}) vượt quá dung lượng max_seq_len ({self.max_seq_len})")
+        if end_pos > self.max_len:
+            raise ValueError(
+                f"Độ dài vượt quá dung lượng cache tối đa: {end_pos} > {self.max_len}"
+            )
 
-        # CRITICAL: Ghi đè trực tiếp token mới vào slice [start_pos : end_pos] theo chiều thời gian.
-        # Thao tác in-place này không phát sinh chi phí cấp phát bộ nhớ mới.
-        self.k_cache[layer_idx][:, :, start_pos:end_pos, :] = k_val
-        self.v_cache[layer_idx][:, :, start_pos:end_pos, :] = v_val
+        # Ghi new_k, new_v vào vị trí current_len
+        self.k_cache[:, :, self.current_len : end_pos, :] = new_k
+        self.v_cache[:, :, self.current_len : end_pos, :] = new_v
 
-        # Trả về toàn bộ key/value từ 0 đến end_pos để phục vụ tính attention
-        active_k = self.k_cache[layer_idx][:, :, :end_pos, :]
-        active_v = self.v_cache[layer_idx][:, :, :end_pos, :]
-        return active_k, active_v
+        # Tăng current_len
+        self.current_len = end_pos
+
+        # Trả về k_full và v_full từ 0 đến current_len
+        k_full = self.k_cache[:, :, : self.current_len, :]
+        v_full = self.v_cache[:, :, : self.current_len, :]
+        return k_full, v_full
 
     def reset(self) -> None:
-        """Reset cache contents to zeros."""
-        for k, v in zip(self.k_cache, self.v_cache):
-            k.zero_()
-            v.zero_()
+        """Reset cache tensors to zeros and reset sequence length pointer."""
+        self.k_cache.zero_()
+        self.v_cache.zero_()
+        self.current_len = 0
 
 
 if __name__ == "__main__":
-    n_layers, batch_size, n_heads, head_dim, max_seq_len = 6, 2, 8, 48, 512
+    # Smoke test: So sánh output giữa không cache và có cache theo từng bước
+    torch.manual_seed(42)
+    device = torch.device("cpu")
+    d_model, n_heads, head_dim, max_len = 64, 4, 16, 64
+
+    attn = CausalSelfAttention(d_model=d_model, n_heads=n_heads, max_len=max_len).to(device)
+    attn.eval()
+    rope = RoPE(head_dim=head_dim, max_len=max_len).to(device)
+
+    # 1. Forward toàn bộ chuỗi x1 shape (1, 5, 64) không có cache
+    x1 = torch.randn(1, 5, d_model, device=device)
+    with torch.no_grad():
+        out1 = attn(x1, rope=rope)
+
+    # 2. Chạy lại với KV Cache cho từng token từ 0..4
     cache = KVCache(
-        n_layers=n_layers,
-        batch_size=batch_size,
+        batch_size=1,
         n_heads=n_heads,
         head_dim=head_dim,
-        max_seq_len=max_seq_len,
+        max_len=max_len,
+        device=device,
+        dtype=x1.dtype,
     )
+    cache.reset()
 
-    # 1. Prefill step: nạp prompt 10 tokens
-    prompt_len = 10
-    k_prompt = torch.randn(batch_size, n_heads, prompt_len, head_dim)
-    v_prompt = torch.randn(batch_size, n_heads, prompt_len, head_dim)
+    outs = []
+    with torch.no_grad():
+        for t in range(5):
+            x_t = x1[:, t : t + 1, :]  # shape (1, 1, 64)
+            out_t = attn(x_t, rope=rope, kv_cache=cache)
+            outs.append(out_t)
 
-    k_out, v_out = cache.update(layer_idx=0, k_val=k_prompt, v_val=v_prompt, start_pos=0)
-    assert k_out.shape == (batch_size, n_heads, prompt_len, head_dim)
-    assert torch.equal(k_out, k_prompt), "Lỗi nạp prefill vào KVCache!"
+    out_cached = torch.cat(outs, dim=1)  # shape (1, 5, 64)
 
-    # 2. Decode step: nạp 1 token tiếp theo tại vị trí start_pos=10
-    k_next = torch.randn(batch_size, n_heads, 1, head_dim)
-    v_next = torch.randn(batch_size, n_heads, 1, head_dim)
-
-    k_out, v_out = cache.update(layer_idx=0, k_val=k_next, v_val=v_next, start_pos=10)
-    assert k_out.shape == (batch_size, n_heads, 11, head_dim)
-    assert torch.equal(k_out[:, :, 10:11, :], k_next), "Lỗi cập nhật decode token tại index 10!"
-
-    print("KVCache smoke test passed successfully!")
+    # 3. So sánh out1 với out_cached
+    max_diff = (out1 - out_cached).abs().max().item()
+    print(f"Max diff vs non-cached output: {max_diff:.8e}")
+    assert max_diff < 1e-5, f"Diff quá lớn: {max_diff}"
+    print("KV Cache OK")

@@ -1,7 +1,7 @@
-"""Causal Multi-Head Self-Attention with Rotary Position Embedding (RoPE)."""
+"""Causal Multi-Head Self-Attention with Rotary Position Embedding (RoPE) and KV Cache."""
 
 import math
-from typing import Optional
+from typing import Any, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +13,7 @@ except ImportError:
 
 
 class CausalSelfAttention(nn.Module):
-    """Causal Multi-Head Self-Attention supporting RoPE and causal masking."""
+    """Causal Multi-Head Self-Attention supporting RoPE, causal masking, and KV Cache."""
 
     def __init__(
         self,
@@ -42,44 +42,61 @@ class CausalSelfAttention(nn.Module):
         self,
         x: torch.Tensor,
         rope: Optional[RoPE] = None,
-        kv_cache: Optional[object] = None,
-        layer_idx: int = 0,
-        start_pos: int = 0,
+        kv_cache: Optional[Any] = None,
     ) -> torch.Tensor:
         B, T, C = x.shape
 
-        # Chiếu ma trận và tách head: (B, T, d_model) -> (B, n_heads, T, head_dim)
+        # Chiếu ma trận cho token đầu vào: (B, T, d_model) -> (B, n_heads, T, head_dim)
         q = self.q_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
         k = self.k_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
         v = self.v_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
 
-        if rope is not None:
-            cos, sin = rope(x, start_pos=start_pos)
-            q, k = apply_rope(q, k, cos, sin)
-
-        # Cập nhật và truy xuất toàn bộ lịch sử Key/Value nếu sử dụng KV Cache
         if kv_cache is not None:
-            k, v = kv_cache.update(layer_idx=layer_idx, k_val=k, v_val=v, start_pos=start_pos)
+            # CRITICAL: RoPE offset — vị trí RoPE phải là vị trí tuyệt đối trong chuỗi
+            # (offset = kv_cache.current_len), không phải vị trí cục bộ trong token mới.
+            # Đây là lỗi phổ biến nhất khiến model sinh sai lệch khi dùng KV Cache.
+            offset = kv_cache.current_len
+            if rope is not None:
+                cos, sin = rope(x, start_pos=offset)
+                q, k = apply_rope(q, k, cos, sin)
 
-        # Tính scaled dot-product attention scores: (B, n_heads, T, seq_len_kv)
-        scores = torch.matmul(q, k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
+            # Ghi k, v mới vào cache và lấy toàn bộ k_full, v_full tính tới hiện tại
+            k, v = kv_cache.append(k, v)
 
-        # CRITICAL: Khi T > 1 (prefill), cần áp dụng causal mask tam giác để không nhìn trước tương lai.
-        # Khi T == 1 (autoregressive decode), token mới chỉ attend về quá khứ đã được lưu trong cache,
-        # do đó không cần mask.
-        if T > 1:
+            # Tính scaled dot-product attention: (B, n_heads, T, total_len)
+            scores = torch.matmul(q, k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
+
+            # CRITICAL: Khi T == 1 (bước decode autoregressive), token hiện tại ở vị trí offset
+            # được phép attend đến toàn bộ quá khứ trong cache (các vị trí 0..offset). Do đó không cần mask.
+            # Khi T > 1 (prefill cùng cache), chỉ áp dụng mask cho phần tương lai cục bộ.
+            if T > 1:
+                mask = self.causal_mask[:T, :T]
+                if offset > 0:
+                    past_mask = torch.ones(T, offset, dtype=torch.bool, device=x.device)
+                    full_mask = torch.cat((past_mask, mask), dim=-1)
+                else:
+                    full_mask = mask
+                scores = scores.masked_fill(~full_mask, float("-inf"))
+        else:
+            # Không dùng KV Cache: Tính attention đầy đủ trên toàn bộ chuỗi T
+            if rope is not None:
+                cos, sin = rope(x, start_pos=0)
+                q, k = apply_rope(q, k, cos, sin)
+
+            scores = torch.matmul(q, k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
+
+            # CRITICAL: 1. Cắt causal_mask theo độ dài T thực tế
+            # CRITICAL: 2. Dùng float("-inf") thay vì -1e9 để tránh tràn số fp16/bf16
             mask = self.causal_mask[:T, :T]
             scores = scores.masked_fill(~mask, float("-inf"))
 
         attn_weights = F.softmax(scores, dim=-1)
         attn_weights = self.dropout(attn_weights)
 
-        # Nhân ma trận với Value: (B, n_heads, T, head_dim)
+        # Nhân trọng số attention với Value: (B, n_heads, T, head_dim)
         out = torch.matmul(attn_weights, v)
 
-        # CRITICAL: 3. Phải gọi contiguous() trước .view(). Phép transpose(1, 2) làm thay đổi
-        # stride của tensor khiến dữ liệu không còn nằm liên tục (contiguous) trên bộ nhớ RAM/VRAM.
-        # Nếu gọi .view() trực tiếp sẽ phát sinh lỗi RuntimeError.
+        # CRITICAL: 3. Phải gọi contiguous() trước .view() sau phép transpose
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.o_proj(out)
 
@@ -94,4 +111,3 @@ if __name__ == "__main__":
 
     assert out.shape == x.shape, f"Shape mismatch: {out.shape} vs {x.shape}"
     print(f"CausalSelfAttention smoke test passed! Output shape: {out.shape}")
-

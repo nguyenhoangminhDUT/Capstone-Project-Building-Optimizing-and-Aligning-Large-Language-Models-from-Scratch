@@ -8,6 +8,7 @@ __pycache__/
 env/
 venv/
 .pytest_cache/
+checkpoints/
 *.pt
 *.bin
 *.npy
