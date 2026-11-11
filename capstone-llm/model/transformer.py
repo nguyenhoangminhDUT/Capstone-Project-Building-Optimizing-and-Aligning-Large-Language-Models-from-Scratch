@@ -1,6 +1,7 @@
 """Autoregressive Transformer Decoder-Only LLM."""
 
 import math
+from typing import List, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,9 +41,14 @@ class Block(nn.Module):
         self.norm2 = RMSNorm(d_model=d_model, eps=eps)
         self.ffn = SwiGLU(d_model=d_model, d_ff=d_ff)
 
-    def forward(self, x: torch.Tensor, rope: RoPE) -> torch.Tensor:
-        # Pre-norm: x = x + attn(norm1(x), rope); x = x + ffn(norm2(x))
-        x = x + self.attn(self.norm1(x), rope=rope)
+    def forward(
+        self,
+        x: torch.Tensor,
+        rope: RoPE,
+        kv_cache: Optional[object] = None,
+    ) -> torch.Tensor:
+        # Pre-norm: x = x + attn(norm1(x), rope, kv_cache); x = x + ffn(norm2(x))
+        x = x + self.attn(self.norm1(x), rope=rope, kv_cache=kv_cache)
         x = x + self.ffn(self.norm2(x))
         return x
 
@@ -104,12 +110,17 @@ class Transformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        kv_caches: Optional[list[object]] = None,
+    ) -> torch.Tensor:
         """Forward pass mapping input token IDs to next-token logits (B, T, vocab_size)."""
         x = self.embedding(input_ids)  # (B, T, d_model)
 
-        for layer in self.layers:
-            x = layer(x, rope=self.rope)
+        for i, layer in enumerate(self.layers):
+            layer_cache = kv_caches[i] if kv_caches is not None else None
+            x = layer(x, rope=self.rope, kv_cache=layer_cache)
 
         x = self.final_norm(x)
         logits = self.lm_head(x)  # (B, T, vocab_size)

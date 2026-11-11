@@ -1,0 +1,34 @@
+[
+  {
+    "length": 16,
+    "use_kv_cache": true,
+    "first_token_ms": 13.527729501220165,
+    "next_token_ms": 19.910819433183253,
+    "throughput": 64.9461717770045,
+    "peak_vram_mb": 0.0
+  },
+  {
+    "length": 16,
+    "use_kv_cache": false,
+    "first_token_ms": 11.674229499476496,
+    "next_token_ms": 14.23974719994779,
+    "throughput": 71.29822220432482,
+    "peak_vram_mb": 0.0
+  },
+  {
+    "length": 32,
+    "use_kv_cache": true,
+    "first_token_ms": 11.566103999939514,
+    "next_token_ms": 9.174875033446975,
+    "throughput": 107.49729934863612,
+    "peak_vram_mb": 0.0
+  },
+  {
+    "length": 32,
+    "use_kv_cache": false,
+    "first_token_ms": 11.281833503744565,
+    "next_token_ms": 17.907297233371843,
+    "throughput": 57.66665888277533,
+    "peak_vram_mb": 0.0
+  }
+]
