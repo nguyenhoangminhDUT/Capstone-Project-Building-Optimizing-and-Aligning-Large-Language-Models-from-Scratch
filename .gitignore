@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and virtual environments
+.venv/
+env/
+venv/
+.pytest_cache/
+*.pt
+*.bin
+*.npy
+
+# macOS system files
+.DS_Store

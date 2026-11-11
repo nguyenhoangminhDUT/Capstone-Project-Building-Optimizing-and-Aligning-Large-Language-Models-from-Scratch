@@ -1,0 +1,209 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "<|unk|>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "<|pad|>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "<|bos|>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "<|eos|>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": null,
+  "pre_tokenizer": {
+    "type": "Whitespace"
+  },
+  "post_processor": null,
+  "decoder": null,
+  "model": {
+    "type": "BPE",
+    "dropout": null,
+    "unk_token": "<|unk|>",
+    "continuing_subword_prefix": null,
+    "end_of_word_suffix": null,
+    "fuse_unk": false,
+    "byte_fallback": false,
+    "ignore_merges": false,
+    "vocab": {
+      "<|unk|>": 0,
+      "<|pad|>": 1,
+      "<|bos|>": 2,
+      "<|eos|>": 3,
+      ",": 4,
+      ".": 5,
+      "L": 6,
+      "O": 7,
+      "S": 8,
+      "T": 9,
+      "a": 10,
+      "b": 11,
+      "c": 12,
+      "d": 13,
+      "e": 14,
+      "g": 15,
+      "h": 16,
+      "i": 17,
+      "k": 18,
+      "l": 19,
+      "m": 20,
+      "n": 21,
+      "o": 22,
+      "p": 23,
+      "r": 24,
+      "s": 25,
+      "t": 26,
+      "u": 27,
+      "v": 28,
+      "w": 29,
+      "y": 30,
+      "he": 31,
+      "me": 32,
+      "it": 33,
+      "the": 34,
+      "On": 35,
+      "as": 36,
+      "ame": 37,
+      "ce": 38,
+      "ime": 39,
+      "le": 40,
+      "lit": 41,
+      "name": 42,
+      "on": 43,
+      "pon": 44,
+      "re": 45,
+      "time": 46,
+      "tle": 47,
+      "upon": 48,
+      "was": 49,
+      "there": 50,
+      "Once": 51,
+      "little": 52,
+      "named": 53
+    },
+    "merges": [
+      [
+        "h",
+        "e"
+      ],
+      [
+        "m",
+        "e"
+      ],
+      [
+        "i",
+        "t"
+      ],
+      [
+        "t",
+        "he"
+      ],
+      [
+        "O",
+        "n"
+      ],
+      [
+        "a",
+        "s"
+      ],
+      [
+        "a",
+        "me"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "i",
+        "me"
+      ],
+      [
+        "l",
+        "e"
+      ],
+      [
+        "l",
+        "it"
+      ],
+      [
+        "n",
+        "ame"
+      ],
+      [
+        "o",
+        "n"
+      ],
+      [
+        "p",
+        "on"
+      ],
+      [
+        "r",
+        "e"
+      ],
+      [
+        "t",
+        "ime"
+      ],
+      [
+        "t",
+        "le"
+      ],
+      [
+        "u",
+        "pon"
+      ],
+      [
+        "w",
+        "as"
+      ],
+      [
+        "the",
+        "re"
+      ],
+      [
+        "On",
+        "ce"
+      ],
+      [
+        "lit",
+        "tle"
+      ],
+      [
+        "name",
+        "d"
+      ]
+    ]
+  }
+}
