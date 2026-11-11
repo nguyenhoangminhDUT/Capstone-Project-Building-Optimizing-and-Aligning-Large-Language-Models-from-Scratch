@@ -74,8 +74,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out_dir",
         type=str,
-        default="checkpoints",
-        help="Output directory for checkpoints (e.g. /content/drive/MyDrive/checkpoints)",
+        default="/content/drive/MyDrive/capstone_checkpoints",
+        help="Output directory for checkpoints (Google Drive)",
     )
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume training from")
     parser.add_argument("--max_steps", type=int, default=5000, help="Total training steps")
@@ -96,9 +96,14 @@ def main() -> None:
     """Main execution function for pre-training loop supporting Resume Training."""
     args = parse_args()
 
-    # Thư mục lưu checkpoint (có thể là Google Drive để lưu trữ lâu dài khi dùng Colab)
+    # Cấu hình đường dẫn lưu checkpoint vào Google Drive trên Colab
     out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        # Dự phòng khi chạy thử nghiệm trên máy local không có phân vùng /content
+        out_dir = Path("checkpoints")
+        out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device(args.device)
     device_type = "cuda" if "cuda" in args.device else "cpu"
