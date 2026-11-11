@@ -1,4 +1,4 @@
-"""Pre-training script for pure PyTorch LLM with AdamW, Cosine LR, Mixed Precision, and Grad Accumulation."""
+"""Pre-training script for pure PyTorch LLM with Resume Training, AdamW, Cosine LR, and Mixed Precision."""
 
 import argparse
 import math
@@ -29,7 +29,7 @@ def get_lr(
 ) -> float:
     """Compute learning rate using linear warmup and cosine decay."""
     if step < warmup_steps:
-        return max_lr * (step + 1) / max(1, warmup_steps)
+        return max_lr * step / max(1, warmup_steps)
     if step > max_steps:
         return min_lr
     decay_ratio = (step - warmup_steps) / max(1, (max_steps - warmup_steps))
@@ -68,11 +68,17 @@ def configure_optimizers(
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for pre-training."""
-    parser = argparse.ArgumentParser(description="Pre-train custom PyTorch LLM")
-    parser.add_argument("--data", type=str, default="data/tinystories_sample.txt", help="Path to text corpus")
+    parser = argparse.ArgumentParser(description="Pre-train custom PyTorch LLM with Resume Training")
+    parser.add_argument("--data", type=str, default="data/tinystories_sample.txt", help="Path to text or .bin corpus")
     parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Path to tokenizer JSON")
-    parser.add_argument("--out_dir", type=str, default="checkpoints", help="Output directory for checkpoints")
-    parser.add_argument("--max_steps", type=int, default=1000, help="Total training steps")
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default="checkpoints",
+        help="Output directory for checkpoints (e.g. /content/drive/MyDrive/checkpoints)",
+    )
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume training from")
+    parser.add_argument("--max_steps", type=int, default=5000, help="Total training steps")
     parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per step")
     parser.add_argument("--lr", type=float, default=3e-4, help="Maximum learning rate")
     parser.add_argument("--warmup_steps", type=int, default=100, help="Linear warmup steps")
@@ -87,10 +93,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Main execution function for pre-training loop."""
+    """Main execution function for pre-training loop supporting Resume Training."""
     args = parse_args()
 
-    # Tạo thư mục lưu checkpoint
+    # Thư mục lưu checkpoint (có thể là Google Drive để lưu trữ lâu dài khi dùng Colab)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -99,28 +105,31 @@ def main() -> None:
     block_size = 512
 
     print(f"Device: {device} | Micro Batch Size: {args.batch_size} | Grad Accum: {args.grad_accum}")
-    print(f"Effective Batch Size: {args.batch_size * args.grad_accum} | Max Steps: {args.max_steps}")
+    print(f"Effective Batch Size: {args.batch_size * args.grad_accum} | Target Max Steps: {args.max_steps}")
 
-    # 1. Nạp và tokenize dữ liệu
+    # 1. Nạp và tokenize dữ liệu (tự động dùng .bin memmap nếu đã cache)
     data_path = Path(args.data)
     tokenizer_path = Path(args.tokenizer)
 
-    # Dự phòng đường dẫn trong thư mục capstone-llm nếu chạy từ root
     if not data_path.exists() and (REPO_ROOT / data_path).exists():
         data_path = REPO_ROOT / data_path
     if not tokenizer_path.exists() and (REPO_ROOT / tokenizer_path).exists():
         tokenizer_path = REPO_ROOT / tokenizer_path
 
-    if not data_path.exists() or not tokenizer_path.exists():
-        print("Tạo dữ liệu ngẫu nhiên cho smoke test do chưa tìm thấy file dữ liệu thật...")
-        token_ids = np.random.randint(0, 12000, size=20000, dtype=np.int64)
-    else:
-        print(f"Tokenizing dữ liệu từ {data_path}...")
+    if str(data_path).endswith(".bin") and data_path.exists():
+        print(f"[Dataset] Nạp trực tiếp file nhị phân {data_path} qua memmap...")
+        token_ids = np.memmap(data_path, dtype=np.uint16, mode="r")
+    elif data_path.exists() and tokenizer_path.exists():
         token_ids = load_and_tokenize(str(data_path), str(tokenizer_path))
-        if len(token_ids) <= block_size:
-            print("Cảnh báo: Dữ liệu quá ngắn, tự động nhân bản dữ liệu để đủ huấn luyện...")
-            multiplier = (block_size * 10 // max(1, len(token_ids))) + 1
-            token_ids = np.tile(token_ids, multiplier)
+    else:
+        print("Tạo dữ liệu ngẫu nhiên cho smoke test do chưa tìm thấy file dữ liệu thật...")
+        token_ids = np.random.randint(0, 12000, size=20000, dtype=np.uint16)
+
+    # Đảm bảo dữ liệu đủ dài cho ít nhất 1 batch
+    if len(token_ids) <= block_size + 1:
+        print("Cảnh báo: Dữ liệu quá ngắn, tự động nhân bản để đủ tạo batch...")
+        multiplier = ((block_size + 1) * 10 // max(1, len(token_ids))) + 1
+        token_ids = np.tile(np.array(token_ids), multiplier)
 
     dataset = TokenDataset(tokens=token_ids, block_size=block_size)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
@@ -149,6 +158,23 @@ def main() -> None:
         device_type=device_type,
     )
 
+    # 4. Tính năng Resume Training (Nối tiếp quá trình train khi bị ngắt kết nối trên Colab)
+    global_step = 0
+    if args.resume:
+        resume_file = Path(args.resume)
+        if not resume_file.exists() and (REPO_ROOT / resume_file).exists():
+            resume_file = REPO_ROOT / resume_file
+
+        if resume_file.exists():
+            print(f"[Resume] Đang nạp checkpoint từ {resume_file}...")
+            checkpoint = torch.load(resume_file, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            global_step = int(checkpoint.get("step", 0))
+            print(f"[Resume] Nạp thành công! Sẽ bắt đầu train tiếp từ step {global_step + 1}...")
+        else:
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint để resume: {args.resume}")
+
     # Thiết lập mixed precision: bfloat16 cho GPU Ampere+ (RTX 3060), float16 cho Colab T4
     amp_dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
     use_amp = (device_type == "cuda")
@@ -156,11 +182,11 @@ def main() -> None:
 
     try:
         model.train()
-        step = 0
         running_tokens = 0
         t0 = time.time()
 
-        while step < args.max_steps:
+        # CRITICAL: Bắt đầu vòng lặp từ global_step + 1 thay vì 1 khi resume
+        for step in range(global_step + 1, args.max_steps + 1):
             optimizer.zero_grad(set_to_none=True)
             accum_loss = 0.0
 
@@ -180,16 +206,14 @@ def main() -> None:
                 x, y = x.to(device), y.to(device)
 
                 # CRITICAL: Về việc tính cross_entropy trong hoặc ngoài autocast:
-                # Với fp16, dải biểu diễn số mũ hạn chế (tối đa ~65504). Nếu logits lớn, hàm Softmax
+                # Với fp16, dải biểu diễn số mũ tối đa ~65504. Nếu logits lớn, hàm Softmax
                 # trong cross_entropy dễ bị tràn số (overflow) sinh ra NaN loss.
-                # Vì vậy, khi chạy fp16, ta ép kiểu logits về float32 (logits.float()) trước khi tính loss
+                # Do đó, khi chạy fp16, ép kiểu logits về float32 (logits.float()) trước khi tính loss
                 # để đảm bảo ổn định số học (numerical stability).
-                # Với bf16 (trên RTX 3060+), dải số mũ tương đương float32 (8-bit exponent) nên hoàn toàn
-                # không lo tràn số.
+                # Với bf16 (RTX 3060+), dải số mũ tương đương float32 nên hoàn toàn không lo tràn số.
                 with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
                     logits = model(x)
                     loss = F.cross_entropy(logits.float().view(-1, model.vocab_size), y.view(-1))
-                    # Chia loss cho grad_accum để scale gradient trung bình chính xác
                     loss = loss / args.grad_accum
 
                 accum_loss += loss.item() * args.grad_accum
@@ -202,10 +226,8 @@ def main() -> None:
             scaler.step(optimizer)
             scaler.update()
 
-            step += 1
-
             # Log mỗi 50 step (hoặc step đầu tiên và step cuối cùng)
-            if step % 50 == 0 or step == 1 or step == args.max_steps:
+            if step % 50 == 0 or step == global_step + 1 or step == args.max_steps:
                 elapsed = time.time() - t0
                 tok_per_sec = running_tokens / elapsed if elapsed > 0 else 0
                 print(
@@ -215,30 +237,33 @@ def main() -> None:
                 running_tokens = 0
                 t0 = time.time()
 
-            # Lưu checkpoint mỗi 1000 step
+            # Lưu checkpoint mỗi 1000 step và ở step cuối cùng
             if step % 1000 == 0 or step == args.max_steps:
-                ckpt_path = out_dir / f"checkpoint_step_{step}.pt"
-                torch.save(
-                    {
-                        "step": step,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "loss": accum_loss,
-                        "lr": current_lr,
-                    },
-                    ckpt_path,
-                )
-                print(f"[Checkpoint] Đã lưu mô hình tại {ckpt_path}")
+                ckpt_data = {
+                    "step": step,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": accum_loss,
+                    "lr": current_lr,
+                }
+                # 1. Lưu checkpoint mang số step cụ thể
+                step_ckpt = out_dir / f"checkpoint_step_{step}.pt"
+                torch.save(ckpt_data, step_ckpt)
+
+                # 2. Đồng thời ghi đè vào latest_checkpoint.pt để resume thuận tiện nhất trên Colab
+                latest_ckpt = out_dir / "latest_checkpoint.pt"
+                torch.save(ckpt_data, latest_ckpt)
+                print(f"[Checkpoint] Đã lưu thành công tại {step_ckpt} và {latest_ckpt}")
 
         print("Huấn luyện hoàn thành xuất sắc!")
 
     except torch.cuda.OutOfMemoryError as oom_err:
         print("\n" + "=" * 70)
         print("LỖI: torch.cuda.OutOfMemoryError - GPU bị tràn bộ nhớ VRAM!")
-        print(f"GỢI Ý KHẮC PHỤC:")
+        print("GỢI Ý KHẮC PHỤC:")
         print(f"1. Giảm micro batch size: hạ --batch_size (ví dụ từ {args.batch_size} xuống {max(1, args.batch_size // 2)}).")
         print(f"2. Tăng --grad_accum (ví dụ từ {args.grad_accum} lên {args.grad_accum * 2}) để giữ nguyên effective batch size.")
-        print(f"3. Đảm bảo đang sử dụng mixed precision (bf16/fp16).")
+        print("3. Đảm bảo đang sử dụng mixed precision (bf16/fp16).")
         print("=" * 70 + "\n")
         raise oom_err
 
