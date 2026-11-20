@@ -13,6 +13,10 @@ checkpoints/
 *.bin
 *.npy
 
+# Generated tokenizer files
+tokenizer/tokenizer.json
+capstone-llm/tokenizer/tokenizer.json
+**/tokenizer.json
+
 # macOS system files
 .DS_Store
-
