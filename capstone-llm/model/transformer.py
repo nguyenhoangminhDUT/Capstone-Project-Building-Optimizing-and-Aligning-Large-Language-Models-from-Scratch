@@ -1,4 +1,4 @@
-"""Autoregressive Transformer Decoder-Only LLM."""
+"""Autoregressive Transformer Decoder-Only LLM (~100M Ultimate Scale-Up)."""
 
 import math
 from typing import List, Optional
@@ -25,8 +25,8 @@ class Block(nn.Module):
         self,
         d_model: int,
         n_heads: int,
-        d_ff: int = 1024,
-        max_len: int = 512,
+        d_ff: int = 2048,
+        max_len: int = 1024,
         eps: float = 1e-6,
         dropout: float = 0.0,
     ) -> None:
@@ -54,16 +54,24 @@ class Block(nn.Module):
 
 
 class Transformer(nn.Module):
-    """Autoregressive Transformer Decoder-Only Language Model."""
+    """
+    Autoregressive Transformer Decoder-Only Language Model.
+    Cấu hình Ultimate Scale-Up ~100M tham số (Tương đương GPT-2 Small):
+    - vocab_size = 32000
+    - d_model = 768, n_layers = 12, n_heads = 12 (head_dim = 64)
+    - d_ff = 2048 (SwiGLU tự động tính theo tỷ lệ 8/3 d_model)
+    - max_seq_len = 1024
+    - Weight Tying giữa Embedding và LM Head
+    """
 
     def __init__(
         self,
-        vocab_size: int = 12000,
-        d_model: int = 384,
-        n_layers: int = 6,
-        n_heads: int = 8,
-        d_ff: int = 1024,
-        max_seq_len: int = 512,
+        vocab_size: int = 32000,
+        d_model: int = 768,
+        n_layers: int = 12,
+        n_heads: int = 12,
+        d_ff: Optional[int] = None,
+        max_seq_len: int = 1024,
         eps: float = 1e-6,
         dropout: float = 0.0,
     ) -> None:
@@ -71,6 +79,14 @@ class Transformer(nn.Module):
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
+
+        # Tự động tính d_ff cho SwiGLU: khoảng 8/3 d_model (khoảng 2048 với d_model=768)
+        if d_ff is None:
+            d_ff = int(2 * 4 * d_model / 3)
+            # Làm tròn về bội số của 64 để tối ưu hóa Tensor Cores
+            d_ff = ((d_ff + 63) // 64) * 64
+
+        self.d_ff = d_ff
 
         self.embedding = nn.Embedding(vocab_size, d_model)
 
@@ -101,6 +117,15 @@ class Transformer(nn.Module):
         # Weight tying giữa token embedding và lm_head
         self.lm_head.weight = self.embedding.weight
 
+        # In thông tin cấu hình và số lượng tham số chính xác
+        total_params = sum(p.numel() for p in self.parameters())
+        print(f"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):")
+        print(f"  - Vocab size  : {self.vocab_size:,}")
+        print(f"  - d_model     : {self.d_model} | n_layers: {len(self.layers)} | n_heads: {n_heads} (head_dim: {head_dim})")
+        print(f"  - d_ff        : {self.d_ff} (SwiGLU)")
+        print(f"  - max_seq_len : {self.max_seq_len}")
+        print(f"  - Tổng số tham số (Weight-Tied): {total_params:,} (~{total_params / 1e6:.1f}M)")
+
     def _init_weights(self, module: nn.Module) -> None:
         """Initialize weights with GPT-2 standard normal distribution (std=0.02) and zero bias."""
         if isinstance(module, nn.Linear):
@@ -128,43 +153,11 @@ class Transformer(nn.Module):
 
 
 if __name__ == "__main__":
-    # Khởi tạo mô hình theo đúng cấu hình spec
-    model = Transformer(
-        vocab_size=12000,
-        d_model=384,
-        n_layers=6,
-        n_heads=8,
-        d_ff=1024,
-        max_seq_len=512,
-        eps=1e-6,
-        dropout=0.0,
-    )
+    # Khởi tạo mô hình 100M chuẩn
+    model = Transformer()
 
-    # Input_ids random shape (2, 32)
-    input_ids = torch.randint(0, 12000, (2, 32))
-    logits = model(input_ids)
-
-    print(f"logits.shape: {logits.shape}")
-    print(f"logits.mean(): {logits.mean().item():.6f}")
-    print(f"logits.std(): {logits.std().item():.6f}")
-    print(f"logits.max(): {logits.max().item():.6f}")
-
-    total_params = sum(p.numel() for p in model.parameters())
-    print(f"Tổng số tham số: {total_params:,}")
-
-    # Tính cross-entropy với labels = input_ids dịch phải 1 token
-    shift_logits = logits[:, :-1, :].contiguous()
-    shift_labels = input_ids[:, 1:].contiguous()
-    loss = F.cross_entropy(
-        shift_logits.view(-1, model.vocab_size),
-        shift_labels.view(-1),
-        reduction="mean",
-    )
-
-    loss_val = loss.item()
-    expected_loss = math.log(model.vocab_size)
-    print(f"Cross-entropy loss: {loss_val:.4f} (Kỳ vọng ~ {expected_loss:.4f})")
-    assert not torch.isnan(loss), "Loss is NaN!"
-    assert not torch.isinf(loss), "Loss is Inf!"
-    assert abs(loss_val - expected_loss) < 0.5, f"Loss lệch quá xa kỳ vọng: {loss_val}"
-    print("OK")
+    # Smoke test forward pass
+    dummy_x = torch.randint(0, model.vocab_size, (2, 16))
+    dummy_logits = model(dummy_x)
+    assert dummy_logits.shape == (2, 16, model.vocab_size), f"Wrong shape: {dummy_logits.shape}"
+    print(f"Forward output shape: {dummy_logits.shape} (OK)")

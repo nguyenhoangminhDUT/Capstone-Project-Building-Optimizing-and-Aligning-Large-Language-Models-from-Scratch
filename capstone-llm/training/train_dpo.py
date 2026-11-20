@@ -1,4 +1,4 @@
-"""Direct Preference Optimization (DPO) training pipeline with LoRA, Google Drive Checkpointing, and Resume Training."""
+"""Direct Preference Optimization (DPO) training pipeline for 100M LLM on Kaggle (T4 x2, LoRA r=32)."""
 
 import argparse
 import math
@@ -28,24 +28,6 @@ except ImportError:
     load_dataset = None
 
 
-def mount_google_drive(mount_point: str = "/content/drive") -> bool:
-    """Tự động mount Google Drive nếu đang chạy trong môi trường Google Colab."""
-    try:
-        from google.colab import drive
-
-        drive_path = Path(mount_point)
-        if not drive_path.exists() or not (drive_path / "MyDrive").exists():
-            print("[Google Drive] Đang tự động kết nối Google Drive...")
-            drive.mount(mount_point)
-            print("[Google Drive] Đã kết nối Google Drive thành công!")
-        return True
-    except ImportError:
-        return False
-    except Exception as e:
-        print(f"[Google Drive] Lưu ý khi mount Drive: {e}")
-        return False
-
-
 class DPODataset(Dataset):
     """
     Dataset cho DPO (Direct Preference Optimization).
@@ -60,7 +42,7 @@ class DPODataset(Dataset):
         self,
         samples: Union[List[Dict[str, str]], object],
         tokenizer: Tokenizer,
-        max_seq_len: int = 512,
+        max_seq_len: int = 1024,
         pad_token_id: int = 1,
         eos_token_id: int = 3,
     ) -> None:
@@ -76,7 +58,6 @@ class DPODataset(Dataset):
     @staticmethod
     def _split_prompt_and_response(text: str) -> Tuple[str, str]:
         """Tách chuỗi đối thoại của Anthropic/hh-rlhf thành phần prompt và response."""
-        # Chuẩn đối thoại của Anthropic: lượt trả lời cuối bắt đầu sau '\n\nAssistant:'
         if "\n\nAssistant:" in text:
             parts = text.rsplit("\n\nAssistant:", 1)
             prompt = parts[0] + "\n\nAssistant:"
@@ -97,7 +78,6 @@ class DPODataset(Dataset):
         prompt_ids = self.tokenizer.encode(prompt_text).ids
         response_ids = self.tokenizer.encode(response_text).ids
 
-        # Giới hạn prompt để không chiếm hết độ dài context, đảm bảo còn chỗ cho response
         max_prompt_len = max(16, self.max_seq_len - 64)
         if len(prompt_ids) > max_prompt_len:
             prompt_ids = prompt_ids[:max_prompt_len]
@@ -106,7 +86,6 @@ class DPODataset(Dataset):
             response_ids = [self.eos_token_id]
 
         input_ids = prompt_ids + response_ids
-        # CRITICAL: Gán nhãn -100 cho toàn bộ token thuộc prompt
         labels = [-100] * len(prompt_ids) + response_ids
 
         target_len = self.max_seq_len + 1
@@ -126,12 +105,10 @@ class DPODataset(Dataset):
         item = self.samples[idx]
 
         if "prompt" in item:
-            # Dạng dict giả lập {prompt, chosen, rejected}
             prompt = str(item.get("prompt", "")).strip()
             chosen_resp = str(item.get("chosen", "")).strip()
             rejected_resp = str(item.get("rejected", "")).strip()
         else:
-            # Dạng Anthropic/hh-rlhf chứa toàn bộ cuộc hội thoại trong 'chosen' và 'rejected'
             chosen_full = str(item.get("chosen", "")).strip()
             rejected_full = str(item.get("rejected", "")).strip()
 
@@ -162,21 +139,17 @@ def compute_logps(
     logits = model(input_ids)  # shape: (B, T, vocab_size)
     log_probs = F.log_softmax(logits.float(), dim=-1)
 
-    # Mặt nạ nhãn hợp lệ: chỉ giữ lại vị trí khác -100 (tức các token phản hồi)
     loss_mask = (labels != -100)
     safe_labels = labels.clone()
     safe_labels[~loss_mask] = 0
 
     per_token_logps = torch.gather(log_probs, dim=-1, index=safe_labels.unsqueeze(-1)).squeeze(-1)
-
-    # CRITICAL: Nhân với loss_mask để chỉ cộng dồn log-prob trên response,
-    # hoàn toàn bỏ qua các token thuộc prompt và padding.
     response_logps = (per_token_logps * loss_mask).sum(dim=-1)
     return response_logps
 
 
 def find_sft_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
-    """Tìm checkpoint SFT phù hợp nhất (ưu tiên explicit -> sft folder trên Drive/local)."""
+    """Tìm checkpoint SFT phù hợp nhất (ưu tiên explicit -> Kaggle -> local)."""
     if explicit_path:
         p = Path(explicit_path)
         if p.exists():
@@ -185,8 +158,8 @@ def find_sft_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
             return REPO_ROOT / p
 
     candidates = [
-        "/content/drive/MyDrive/capstone_checkpoints/sft/lora_sft_adapter.pt",
-        "/content/drive/MyDrive/capstone_checkpoints/sft/latest_sft_checkpoint.pt",
+        "/kaggle/working/capstone_checkpoints/sft/lora_sft_adapter.pt",
+        "/kaggle/working/capstone_checkpoints/sft/latest_sft_checkpoint.pt",
         "checkpoints/sft/lora_sft_adapter.pt",
         "checkpoints/sft/latest_sft_checkpoint.pt",
         str(REPO_ROOT / "checkpoints/sft/lora_sft_adapter.pt"),
@@ -201,25 +174,25 @@ def find_sft_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for DPO training."""
-    parser = argparse.ArgumentParser(description="Direct Preference Optimization (DPO) with LoRA")
-    parser.add_argument("--sft_ckpt", type=str, default=None, help="Đường dẫn tới SFT checkpoint (Task 3.2)")
+    parser = argparse.ArgumentParser(description="Direct Preference Optimization (DPO) for 100M LLM on Kaggle")
+    parser.add_argument("--sft_ckpt", type=str, default=None, help="Đường dẫn tới SFT checkpoint (LoRA r=32)")
     parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Đường dẫn tới tokenizer.json")
     parser.add_argument(
         "--out_dir",
         type=str,
-        default="/content/drive/MyDrive/capstone_checkpoints/dpo",
-        help="Thư mục lưu DPO checkpoint trên Google Drive",
+        default="/kaggle/working/capstone_checkpoints/dpo",
+        help="Thư mục lưu DPO checkpoint trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới DPO checkpoint để resume")
     parser.add_argument("--max_steps", type=int, default=1000, help="Tổng số bước huấn luyện DPO")
     parser.add_argument("--max_samples", type=int, default=5000, help="Số lượng mẫu tải từ Anthropic/hh-rlhf")
-    parser.add_argument("--batch_size", type=int, default=2, help="Micro batch size")
+    parser.add_argument("--batch_size", type=int, default=2, help="Micro batch size per GPU")
     parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate cho policy LoRA")
-    parser.add_argument("--beta", type=float, default=0.1, help="Hệ số DPO beta nhiệt độ")
-    parser.add_argument("--lora_r", type=int, default=8, help="Rank LoRA")
-    parser.add_argument("--lora_alpha", type=float, default=16.0, help="Alpha LoRA")
-    parser.add_argument("--max_seq_len", type=int, default=512, help="Độ dài ngữ cảnh tối đa")
+    parser.add_argument("--beta", type=float, default=0.1, help="Hệ số DPO beta nhiệt độ (mặc định 0.1)")
+    parser.add_argument("--lora_r", type=int, default=32, help="LoRA rank r (mặc định 32 cho model 100M)")
+    parser.add_argument("--lora_alpha", type=float, default=64.0, help="LoRA alpha (mặc định 64)")
+    parser.add_argument("--max_seq_len", type=int, default=1024, help="Độ dài ngữ cảnh tối đa")
     parser.add_argument("--save_every", type=int, default=200, help="Số bước lưu checkpoint định kỳ")
     parser.add_argument(
         "--device",
@@ -232,12 +205,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Vòng lặp chính huấn luyện DPO."""
+    """Main execution function for DPO training on Kaggle Dual T4 GPUs."""
     args = parse_args()
 
-    # 1. Tự động kết nối Google Drive nếu đang chạy trong Colab
-    mount_google_drive()
-
+    # 1. Cấu hình thư mục lưu checkpoint trên Kaggle
     out_dir = Path(args.out_dir)
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -248,7 +219,10 @@ def main() -> None:
 
     device = torch.device(args.device)
     device_type = "cuda" if "cuda" in args.device else "cpu"
-    print(f"Device: {device} | Batch Size: {args.batch_size} | Grad Accum: {args.grad_accum}")
+    num_gpus = torch.cuda.device_count() if device_type == "cuda" else 0
+
+    print(f"Device: {device} | Số GPU khả dụng: {num_gpus}")
+    print(f"Micro Batch Size: {args.batch_size} | Grad Accum: {args.grad_accum}")
     print(f"Beta: {args.beta} | LR: {args.lr} | Max Steps: {args.max_steps}")
 
     # 2. Nạp Tokenizer
@@ -258,7 +232,7 @@ def main() -> None:
     if not tokenizer_path.exists():
         raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
     tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size()})")
+    print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
 
     # 3. Tải dataset Anthropic/hh-rlhf (5,000 mẫu)
     if args.smoke_test or load_dataset is None:
@@ -276,12 +250,12 @@ def main() -> None:
             },
         ]
     else:
-        print(f"[Dataset] Đang tải {args.max_samples} mẫu từ 'Anthropic/hh-rlhf'...")
+        print(f"[Dataset] Đang tải {args.max_samples:,} mẫu từ 'Anthropic/hh-rlhf'...")
         try:
             split_str = f"train[:{args.max_samples}]"
             ds = load_dataset("Anthropic/hh-rlhf", split=split_str)
             raw_samples = ds
-            print(f"[Dataset] Tải thành công {len(raw_samples)} mẫu preference.")
+            print(f"[Dataset] Tải thành công {len(raw_samples):,} mẫu preference.")
         except Exception as e:
             print(f"[Dataset] Lỗi tải online ({e}), chuyển sang dữ liệu giả lập...")
             raw_samples = [
@@ -302,61 +276,70 @@ def main() -> None:
         tokenizer=tokenizer,
         max_seq_len=args.max_seq_len,
     )
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size * max(1, num_gpus), shuffle=True, drop_last=True)
     data_iter = iter(dataloader)
 
-    # 4. Khởi tạo mô hình policy_model và ref_model
-    def build_transformer():
+    # 4. Khởi tạo mô hình policy_model và ref_model 100M
+    def build_transformer_100m():
         return Transformer(
-            vocab_size=12000,
-            d_model=384,
-            n_layers=6,
-            n_heads=8,
-            d_ff=1024,
+            vocab_size=tokenizer.get_vocab_size(),
+            d_model=768,
+            n_layers=12,
+            n_heads=12,
+            d_ff=2048,
             max_seq_len=args.max_seq_len,
             dropout=0.0,
         )
 
-    print("\nKhởi tạo Policy Model và Reference Model...")
-    policy_model = build_transformer().to(device)
-    ref_model = build_transformer().to(device)
+    print("\nKhởi tạo Policy Model và Reference Model (100M Scale)...")
+    base_policy = build_transformer_100m().to(device)
+    base_ref = build_transformer_100m().to(device)
 
-    # Gắn LoRA vào policy model và ref model
-    apply_lora(policy_model, r=args.lora_r, alpha=args.lora_alpha)
-    apply_lora(ref_model, r=args.lora_r, alpha=args.lora_alpha)
+    # Gắn LoRA r=32, alpha=64 vào cả 2 mô hình
+    apply_lora(base_policy, r=args.lora_r, alpha=args.lora_alpha)
+    apply_lora(base_ref, r=args.lora_r, alpha=args.lora_alpha)
 
-    # Nạp SFT checkpoint (Task 3.2) nếu có
+    # Nạp SFT checkpoint nếu có
     sft_ckpt = find_sft_checkpoint(args.sft_ckpt)
     if sft_ckpt:
         print(f"[SFT Checkpoint] Đang nạp trọng số SFT từ {sft_ckpt}...")
         sft_data = torch.load(sft_ckpt, map_location=device, weights_only=False)
         if "lora_state_dict" in sft_data:
-            policy_model.load_state_dict(sft_data["lora_state_dict"], strict=False)
-            ref_model.load_state_dict(sft_data["lora_state_dict"], strict=False)
+            base_policy.load_state_dict(sft_data["lora_state_dict"], strict=False)
+            base_ref.load_state_dict(sft_data["lora_state_dict"], strict=False)
         elif "model_state_dict" in sft_data:
-            policy_model.load_state_dict(sft_data["model_state_dict"], strict=False)
-            ref_model.load_state_dict(sft_data["model_state_dict"], strict=False)
+            base_policy.load_state_dict(sft_data["model_state_dict"], strict=False)
+            base_ref.load_state_dict(sft_data["model_state_dict"], strict=False)
         elif isinstance(sft_data, dict):
-            policy_model.load_state_dict(sft_data, strict=False)
-            ref_model.load_state_dict(sft_data, strict=False)
+            base_policy.load_state_dict(sft_data, strict=False)
+            base_ref.load_state_dict(sft_data, strict=False)
         print("[SFT Checkpoint] Nạp thành công!")
     else:
-        print("[SFT Checkpoint] Cảnh báo: Không tìm thấy checkpoint SFT, sử dụng trọng số khởi tạo ban đầu.")
+        print("[SFT Checkpoint] Cảnh báo: Không tìm thấy checkpoint SFT, sử dụng trọng số ban đầu.")
 
     # CRITICAL: Reference model đóng băng 100% tham số và chuyển sang chế độ eval()
-    ref_model.eval()
-    for p in ref_model.parameters():
+    base_ref.eval()
+    for p in base_ref.parameters():
         p.requires_grad = False
+
+    # Multi-GPU DataParallel cho Kaggle T4 x2
+    if device_type == "cuda" and num_gpus > 1:
+        print(f"[Multi-GPU] Bọc Policy & Reference Model bằng torch.nn.DataParallel ({num_gpus} GPUs).")
+        policy_model = torch.nn.DataParallel(base_policy)
+        ref_model = torch.nn.DataParallel(base_ref)
+    else:
+        policy_model = base_policy
+        ref_model = base_ref
+
+    raw_policy = policy_model.module if isinstance(policy_model, torch.nn.DataParallel) else policy_model
 
     # Policy model ở chế độ train()
     policy_model.train()
-    trainable_params = [p for p in policy_model.parameters() if p.requires_grad]
+    trainable_params = [p for p in raw_policy.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 
-    # Thiết lập Mixed Precision
-    amp_dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
     use_amp = (device_type == "cuda")
-    scaler = torch.amp.GradScaler(device=device_type, enabled=(use_amp and amp_dtype == torch.float16))
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # 5. Tính năng Resume Training DPO
     start_step = 0
@@ -369,7 +352,7 @@ def main() -> None:
             print(f"[Resume] Đang nạp DPO checkpoint từ {resume_file}...")
             ckpt = torch.load(resume_file, map_location=device, weights_only=False)
             if "lora_state_dict" in ckpt:
-                policy_model.load_state_dict(ckpt["lora_state_dict"], strict=False)
+                raw_policy.load_state_dict(ckpt["lora_state_dict"], strict=False)
             if "optimizer_state_dict" in ckpt:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             if "scaler_state_dict" in ckpt and ckpt["scaler_state_dict"] and scaler.is_enabled():
@@ -381,7 +364,7 @@ def main() -> None:
 
     # 6. Vòng lặp huấn luyện DPO
     print("\n" + "=" * 65)
-    print(f"BẮT ĐẦU HUẤN LUYỆN DPO (BETA={args.beta}, MAX_STEPS={args.max_steps})")
+    print(f"BẮT ĐẦU HUẤN LUYỆN DPO 100M (BETA={args.beta}, MAX_STEPS={args.max_steps})")
     print("=" * 65)
 
     optimizer.zero_grad(set_to_none=True)
@@ -403,18 +386,18 @@ def main() -> None:
             c_x, c_y = c_x.to(device), c_y.to(device)
             r_x, r_y = r_x.to(device), r_y.to(device)
 
-            # 1. Tính logps từ Reference Model (trong context torch.no_grad())
+            # 1. Tính logps từ Reference Model (no_grad)
             with torch.no_grad():
-                with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
+                with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
                     ref_chosen_logps = compute_logps(ref_model, c_x, c_y)
                     ref_rejected_logps = compute_logps(ref_model, r_x, r_y)
 
-            # 2. Tính logps từ Policy Model (có gradient cho LoRA)
-            with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
+            # 2. Tính logps từ Policy Model (có gradient cho LoRA r=32)
+            with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
                 policy_chosen_logps = compute_logps(policy_model, c_x, c_y)
                 policy_rejected_logps = compute_logps(policy_model, r_x, r_y)
 
-                # 3. Tính DPO loss và implicit rewards
+                # 3. Tính DPO loss và implicit rewards với hệ số beta=0.1
                 loss, chosen_rewards, rejected_rewards = dpo_loss(
                     policy_chosen_logps=policy_chosen_logps,
                     policy_rejected_logps=policy_rejected_logps,
@@ -430,7 +413,6 @@ def main() -> None:
             accum_c_rew += chosen_rewards.mean().item() / args.grad_accum
             accum_r_rew += rejected_rewards.mean().item() / args.grad_accum
 
-        # Cập nhật gradient sau mỗi grad_accum bước
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
         scaler.step(optimizer)
@@ -439,7 +421,6 @@ def main() -> None:
 
         reward_margin = accum_c_rew - accum_r_rew
 
-        # Log các chỉ số (loss, chosen_rewards, rejected_rewards, reward_margin)
         if step % 10 == 0 or args.smoke_test:
             print(
                 f"DPO Step {step:5d}/{steps_to_run} | "
@@ -450,13 +431,12 @@ def main() -> None:
                 f"Time: {time.time() - t0:.2f}s"
             )
 
-        # Lưu checkpoint định kỳ
         if step % args.save_every == 0 and not args.smoke_test:
             ckpt_path = out_dir / f"dpo_step_{step}.pt"
             torch.save(
                 {
                     "step": step,
-                    "lora_state_dict": get_lora_state_dict(policy_model),
+                    "lora_state_dict": get_lora_state_dict(raw_policy),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
                     "loss": accum_loss,
@@ -464,11 +444,11 @@ def main() -> None:
                 },
                 ckpt_path,
             )
-            torch.save(get_lora_state_dict(policy_model), out_dir / "lora_dpo_adapter.pt")
+            torch.save(get_lora_state_dict(raw_policy), out_dir / "lora_dpo_adapter.pt")
             torch.save(
                 {
                     "step": step,
-                    "lora_state_dict": get_lora_state_dict(policy_model),
+                    "lora_state_dict": get_lora_state_dict(raw_policy),
                     "optimizer_state_dict": optimizer.state_dict(),
                 },
                 out_dir / "latest_dpo_checkpoint.pt",
@@ -479,11 +459,10 @@ def main() -> None:
         accum_c_rew = 0.0
         accum_r_rew = 0.0
 
-    # Lưu checkpoint DPO cuối cùng
     final_adapter_path = out_dir / "lora_dpo_adapter.pt"
-    torch.save(get_lora_state_dict(policy_model), final_adapter_path)
+    torch.save(get_lora_state_dict(raw_policy), final_adapter_path)
     print("\n" + "=" * 65)
-    print("HOÀN THÀNH HUẤN LUYỆN DPO!")
+    print("HOÀN THÀNH HUẤN LUYỆN DPO 100M!")
     print(f"DPO LoRA Adapter đã được lưu tại: {final_adapter_path}")
     print("=" * 65)
 

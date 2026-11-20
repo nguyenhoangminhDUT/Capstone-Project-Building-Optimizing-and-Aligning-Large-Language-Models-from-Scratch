@@ -11,8 +11,8 @@ class LoRALinear(nn.Module):
     def __init__(
         self,
         base: nn.Linear,
-        r: int = 8,
-        alpha: float = 16.0,
+        r: int = 32,
+        alpha: float = 64.0,
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
@@ -47,8 +47,8 @@ class LoRALinear(nn.Module):
 
 def apply_lora(
     model: nn.Module,
-    r: int = 8,
-    alpha: float = 16.0,
+    r: int = 32,
+    alpha: float = 64.0,
     target_modules: Optional[List[str]] = None,
     dropout: float = 0.0,
 ) -> List[LoRALinear]:
