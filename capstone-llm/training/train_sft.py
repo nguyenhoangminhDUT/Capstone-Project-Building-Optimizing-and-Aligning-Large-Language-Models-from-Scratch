@@ -1,9 +1,12 @@
 """Supervised Fine-Tuning (SFT) with 100M LLM, LoRA (r=32), Math Mix, and Kaggle Multi-GPU."""
 
+import os
+# CRITICAL: Tránh phân mảnh bộ nhớ VRAM trên GPU T4 x2
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import argparse
 import glob
 import math
-import os
 import random
 import sys
 import time
@@ -151,7 +154,7 @@ def find_base_checkpoint(
     explicit_path: Optional[str] = None,
     checkpoint_dirs: Optional[List[str]] = None,
 ) -> Optional[Path]:
-    """Tìm checkpoint pre-train phù hợp nhất (ưu tiên explicit -> Kaggle -> local)."""
+    """Tìm checkpoint pre-train phù hợp nhất (ưu tiên explicit -> best_model.pt -> latest_checkpoint.pt)."""
     if explicit_path:
         p = Path(explicit_path)
         if p.exists():
@@ -165,6 +168,7 @@ def find_base_checkpoint(
             "/kaggle/working/capstone_checkpoints",
             "checkpoints/pretrain",
             "checkpoints",
+            str(REPO_ROOT / "checkpoints/pretrain"),
             str(REPO_ROOT / "checkpoints"),
         ]
 
@@ -172,6 +176,10 @@ def find_base_checkpoint(
         dir_path = Path(d)
         if not dir_path.exists():
             continue
+
+        best = dir_path / "best_model.pt"
+        if best.exists():
+            return best
 
         latest = dir_path / "latest_checkpoint.pt"
         if latest.exists():
@@ -193,7 +201,7 @@ def find_base_checkpoint(
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for SFT training."""
     parser = argparse.ArgumentParser(description="Supervised Fine-Tuning (SFT) for 100M LLM with LoRA r=32")
-    parser.add_argument("--base_ckpt", type=str, default=None, help="Đường dẫn tới pretrain checkpoint 100M")
+    parser.add_argument("--base_ckpt", type=str, default=None, help="Đường dẫn tới pretrain checkpoint 100M (best_model.pt)")
     parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Đường dẫn tới tokenizer.json")
     parser.add_argument(
         "--out_dir",
@@ -202,12 +210,12 @@ def parse_args() -> argparse.Namespace:
         help="Thư mục lưu SFT checkpoints trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới SFT checkpoint để train nối tiếp")
-    parser.add_argument("--epochs", type=int, default=2, help="Số epoch huấn luyện SFT (1-2 epochs)")
+    parser.add_argument("--epochs", type=int, default=2, help="Số epoch huấn luyện SFT (mặc định 2 epochs)")
     parser.add_argument("--max_samples", type=int, default=20000, help="Số lượng mẫu tải từ yahma/alpaca-cleaned")
     parser.add_argument("--math_samples", type=int, default=10000, help="Số lượng mẫu toán học tự sinh (1-2 chữ số)")
-    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU")
-    parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
-    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate cho các adapter LoRA")
+    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU (mặc định 4)")
+    parser.add_argument("--grad_accum", type=int, default=16, help="Gradient accumulation steps (mặc định 16)")
+    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate cho các adapter LoRA (mặc định 2e-4)")
     parser.add_argument("--lora_r", type=int, default=32, help="LoRA rank r (mặc định 32 cho model 100M)")
     parser.add_argument("--lora_alpha", type=float, default=64.0, help="LoRA alpha (mặc định 64)")
     parser.add_argument("--max_seq_len", type=int, default=1024, help="Độ dài ngữ cảnh tối đa")
@@ -336,34 +344,60 @@ def main() -> None:
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 
     use_amp = (device_type == "cuda")
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
-    # 7. Tính năng Resume Training SFT
+    # 7. Tính năng Tự động Resume Training SFT
     start_epoch = 1
     global_step = 0
+    resume_file: Optional[Path] = None
+
     if args.resume:
-        resume_file = Path(args.resume)
-        if not resume_file.exists() and (REPO_ROOT / resume_file).exists():
-            resume_file = REPO_ROOT / resume_file
-
-        if resume_file.exists():
-            print(f"[Resume] Đang nạp SFT checkpoint từ {resume_file}...")
-            ckpt = torch.load(resume_file, map_location=device, weights_only=False)
-            if "lora_state_dict" in ckpt:
-                raw_model.load_state_dict(ckpt["lora_state_dict"], strict=False)
-            elif "model_state_dict" in ckpt:
-                raw_model.load_state_dict(ckpt["model_state_dict"], strict=False)
-
-            if "optimizer_state_dict" in ckpt:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            if "scaler_state_dict" in ckpt and ckpt["scaler_state_dict"] and scaler.is_enabled():
-                scaler.load_state_dict(ckpt["scaler_state_dict"])
-
-            global_step = int(ckpt.get("step", 0))
-            start_epoch = int(ckpt.get("epoch", 1))
-            print(f"[Resume] Nạp thành công! Tiếp tục từ Epoch {start_epoch}, Step {global_step + 1}...")
+        rf = Path(args.resume)
+        if not rf.exists() and (REPO_ROOT / rf).exists():
+            rf = REPO_ROOT / rf
+        if rf.exists():
+            resume_file = rf
         else:
             raise FileNotFoundError(f"Không tìm thấy SFT checkpoint để resume: {args.resume}")
+    else:
+        # Tự động tìm checkpoint trong out_dir
+        latest_candidate = out_dir / "latest_sft_checkpoint.pt"
+        if latest_candidate.exists():
+            resume_file = latest_candidate
+        else:
+            step_files = list(out_dir.glob("sft_step_*.pt"))
+            if step_files:
+                def extract_step(path: Path) -> int:
+                    try:
+                        return int(path.stem.split("_")[-1])
+                    except ValueError:
+                        return 0
+                step_files.sort(key=extract_step, reverse=True)
+                resume_file = step_files[0]
+
+    if resume_file:
+        print(f"[Auto-Resume SFT] Đang nạp SFT checkpoint từ: {resume_file}")
+        ckpt = torch.load(resume_file, map_location=device, weights_only=False)
+        if "lora_state_dict" in ckpt:
+            raw_model.load_state_dict(ckpt["lora_state_dict"], strict=False)
+        elif "model_state_dict" in ckpt:
+            raw_model.load_state_dict(ckpt["model_state_dict"], strict=False)
+
+        if "optimizer_state_dict" in ckpt:
+            try:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume SFT] Cảnh báo không nạp được optimizer state: {e}")
+
+        if "scaler_state_dict" in ckpt and ckpt["scaler_state_dict"] and scaler.is_enabled():
+            try:
+                scaler.load_state_dict(ckpt["scaler_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume SFT] Cảnh báo không nạp được scaler state: {e}")
+
+        global_step = int(ckpt.get("step", 0))
+        start_epoch = int(ckpt.get("epoch", 1))
+        print(f"[Auto-Resume SFT] Nạp thành công! Tiếp tục từ Epoch {start_epoch}, Step {global_step + 1}...")
 
     # 8. Vòng lặp huấn luyện SFT
     print("\n" + "=" * 65)
@@ -384,9 +418,9 @@ def main() -> None:
         for batch_idx, (x, y) in enumerate(dataloader):
             x, y = x.to(device), y.to(device)
 
-            with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
+            with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 logits = model(x)
-                # Ép kiểu float32 trước cross_entropy để tránh tràn số trong fp16
+                # Ép kiểu float32 trước cross_entropy để chống tràn số trong fp16
                 logits_f32 = logits.float()
                 loss = F.cross_entropy(
                     logits_f32.view(-1, raw_model.vocab_size),
@@ -416,27 +450,17 @@ def main() -> None:
 
                 if global_step % args.save_every == 0 and not args.smoke_test:
                     ckpt_save_path = out_dir / f"sft_step_{global_step}.pt"
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "step": global_step,
-                            "lora_state_dict": get_lora_state_dict(raw_model),
-                            "optimizer_state_dict": optimizer.state_dict(),
-                            "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
-                            "loss": accum_loss,
-                        },
-                        ckpt_save_path,
-                    )
+                    save_payload = {
+                        "epoch": epoch,
+                        "step": global_step,
+                        "lora_state_dict": get_lora_state_dict(raw_model),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
+                        "loss": accum_loss,
+                    }
+                    torch.save(save_payload, ckpt_save_path)
+                    torch.save(save_payload, out_dir / "latest_sft_checkpoint.pt")
                     torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "step": global_step,
-                            "lora_state_dict": get_lora_state_dict(raw_model),
-                            "optimizer_state_dict": optimizer.state_dict(),
-                        },
-                        out_dir / "latest_sft_checkpoint.pt",
-                    )
                     print(f"[Checkpoint] Đã lưu SFT checkpoint tại step {global_step} vào {ckpt_save_path}")
 
                 accum_loss = 0.0
@@ -449,25 +473,28 @@ def main() -> None:
         print(f"\n--- Kết thúc Epoch {epoch}/{args.epochs} | Loss trung bình: {avg_loss:.4f} | Thời gian: {epoch_time:.2f}s ---")
 
         epoch_ckpt_path = out_dir / f"sft_epoch_{epoch}.pt"
-        torch.save(
-            {
-                "epoch": epoch,
-                "step": global_step,
-                "lora_state_dict": get_lora_state_dict(raw_model),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": avg_loss,
-            },
-            epoch_ckpt_path,
-        )
+        save_epoch_payload = {
+            "epoch": epoch,
+            "step": global_step,
+            "lora_state_dict": get_lora_state_dict(raw_model),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
+            "loss": avg_loss,
+        }
+        torch.save(save_epoch_payload, epoch_ckpt_path)
+        torch.save(save_epoch_payload, out_dir / "latest_sft_checkpoint.pt")
         torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
         print(f"[Checkpoint] Đã lưu SFT Adapter ra {out_dir / 'lora_sft_adapter.pt'}")
 
         if args.smoke_test:
             break
 
+    # Lưu lại adapter cuối cùng
+    torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
     print("\n" + "=" * 65)
     print("HOÀN THÀNH HUẤN LUYỆN SFT 100M!")
     print(f"LoRA Adapter được lưu an toàn tại: {out_dir / 'lora_sft_adapter.pt'}")
+    print(f"Checkpoint SFT mới nhất tại: {out_dir / 'latest_sft_checkpoint.pt'}")
     print("=" * 65)
 
 

@@ -2,21 +2,38 @@
 __pycache__/
 *.py[cod]
 *$py.class
+**/*.pyc
 
 # Caches and virtual environments
 .venv/
 env/
 venv/
 .pytest_cache/
+
+# Model Checkpoints and Weights
 checkpoints/
+**/checkpoints/
+capstone_checkpoints/
+**/capstone_checkpoints/
 *.pt
 *.bin
 *.npy
+*.pth
 
-# Generated tokenizer files
+# Large Dataset Files and Archives
+data/tinystories_full.txt
+**/data/tinystories_full.txt
+*.zip
+*.tar
+*.gz
+
+# Generated Tokenizer Files (Do not commit to overwrite Kaggle trained tokenizer)
 tokenizer/tokenizer.json
 capstone-llm/tokenizer/tokenizer.json
 **/tokenizer.json
 
-# macOS system files
+# macOS / OS system files
 .DS_Store
+**/.DS_Store
+._*
+__MACOSX/

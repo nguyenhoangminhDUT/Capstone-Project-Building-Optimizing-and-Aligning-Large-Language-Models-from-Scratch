@@ -1,8 +1,11 @@
-"""Direct Preference Optimization (DPO) training pipeline for 100M LLM on Kaggle (T4 x2, LoRA r=32)."""
+"""Direct Preference Optimization (DPO) training pipeline for 100M LLM on Kaggle (T4 x2, LoRA r=32, Auto-Resume)."""
+
+import os
+# CRITICAL: Tránh phân mảnh bộ nhớ VRAM trên GPU T4 x2
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import argparse
 import math
-import os
 import sys
 import time
 from pathlib import Path
@@ -148,6 +151,31 @@ def compute_logps(
     return response_logps
 
 
+def find_base_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
+    """Tìm checkpoint pre-train phù hợp nhất (ưu tiên explicit -> best_model.pt -> latest_checkpoint.pt)."""
+    if explicit_path:
+        p = Path(explicit_path)
+        if p.exists():
+            return p
+        if (REPO_ROOT / p).exists():
+            return REPO_ROOT / p
+
+    candidates = [
+        "/kaggle/working/capstone_checkpoints/pretrain/best_model.pt",
+        "/kaggle/working/capstone_checkpoints/pretrain/latest_checkpoint.pt",
+        "/kaggle/working/capstone_checkpoints/best_model.pt",
+        "checkpoints/pretrain/best_model.pt",
+        "checkpoints/pretrain/latest_checkpoint.pt",
+        str(REPO_ROOT / "checkpoints/pretrain/best_model.pt"),
+        str(REPO_ROOT / "checkpoints/best_model.pt"),
+    ]
+    for c in candidates:
+        cp = Path(c)
+        if cp.exists():
+            return cp
+    return None
+
+
 def find_sft_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
     """Tìm checkpoint SFT phù hợp nhất (ưu tiên explicit -> Kaggle -> local)."""
     if explicit_path:
@@ -175,7 +203,8 @@ def find_sft_checkpoint(explicit_path: Optional[str] = None) -> Optional[Path]:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for DPO training."""
     parser = argparse.ArgumentParser(description="Direct Preference Optimization (DPO) for 100M LLM on Kaggle")
-    parser.add_argument("--sft_ckpt", type=str, default=None, help="Đường dẫn tới SFT checkpoint (LoRA r=32)")
+    parser.add_argument("--base_ckpt", type=str, default=None, help="Đường dẫn tới base pretrain checkpoint (best_model.pt)")
+    parser.add_argument("--sft_ckpt", type=str, default=None, help="Đường dẫn tới SFT checkpoint (lora_sft_adapter.pt)")
     parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Đường dẫn tới tokenizer.json")
     parser.add_argument(
         "--out_dir",
@@ -184,11 +213,11 @@ def parse_args() -> argparse.Namespace:
         help="Thư mục lưu DPO checkpoint trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới DPO checkpoint để resume")
-    parser.add_argument("--max_steps", type=int, default=1000, help="Tổng số bước huấn luyện DPO")
+    parser.add_argument("--max_steps", type=int, default=1000, help="Tổng số bước huấn luyện DPO (mặc định 1,000)")
     parser.add_argument("--max_samples", type=int, default=5000, help="Số lượng mẫu tải từ Anthropic/hh-rlhf")
-    parser.add_argument("--batch_size", type=int, default=2, help="Micro batch size per GPU")
-    parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate cho policy LoRA")
+    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU (mặc định 4)")
+    parser.add_argument("--grad_accum", type=int, default=16, help="Gradient accumulation steps (mặc định 16)")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate cho policy LoRA (mặc định 1e-4)")
     parser.add_argument("--beta", type=float, default=0.1, help="Hệ số DPO beta nhiệt độ (mặc định 0.1)")
     parser.add_argument("--lora_r", type=int, default=32, help="LoRA rank r (mặc định 32 cho model 100M)")
     parser.add_argument("--lora_alpha", type=float, default=64.0, help="LoRA alpha (mặc định 64)")
@@ -295,6 +324,17 @@ def main() -> None:
     base_policy = build_transformer_100m().to(device)
     base_ref = build_transformer_100m().to(device)
 
+    # Nạp base model weights nếu có
+    base_ckpt = find_base_checkpoint(args.base_ckpt)
+    if base_ckpt:
+        print(f"[Base Checkpoint] Đang nạp base model weights từ {base_ckpt}...")
+        base_data = torch.load(base_ckpt, map_location=device, weights_only=False)
+        base_sd = base_data.get("model_state_dict", base_data)
+        clean_base_sd = {k.replace("module.", ""): v for k, v in base_sd.items()}
+        base_policy.load_state_dict(clean_base_sd)
+        base_ref.load_state_dict(clean_base_sd)
+        print("[Base Checkpoint] Nạp base model weights thành công!")
+
     # Gắn LoRA r=32, alpha=64 vào cả 2 mô hình
     apply_lora(base_policy, r=args.lora_r, alpha=args.lora_alpha)
     apply_lora(base_ref, r=args.lora_r, alpha=args.lora_alpha)
@@ -339,131 +379,156 @@ def main() -> None:
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 
     use_amp = (device_type == "cuda")
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
-    # 5. Tính năng Resume Training DPO
+    # 5. Tính năng Tự động Resume Training DPO
     start_step = 0
-    if args.resume:
-        resume_file = Path(args.resume)
-        if not resume_file.exists() and (REPO_ROOT / resume_file).exists():
-            resume_file = REPO_ROOT / resume_file
+    resume_file: Optional[Path] = None
 
-        if resume_file.exists():
-            print(f"[Resume] Đang nạp DPO checkpoint từ {resume_file}...")
-            ckpt = torch.load(resume_file, map_location=device, weights_only=False)
-            if "lora_state_dict" in ckpt:
-                raw_policy.load_state_dict(ckpt["lora_state_dict"], strict=False)
-            if "optimizer_state_dict" in ckpt:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            if "scaler_state_dict" in ckpt and ckpt["scaler_state_dict"] and scaler.is_enabled():
-                scaler.load_state_dict(ckpt["scaler_state_dict"])
-            start_step = int(ckpt.get("step", 0))
-            print(f"[Resume] Nạp thành công! Tiếp tục từ Step {start_step + 1}...")
+    if args.resume:
+        rf = Path(args.resume)
+        if not rf.exists() and (REPO_ROOT / rf).exists():
+            rf = REPO_ROOT / rf
+        if rf.exists():
+            resume_file = rf
         else:
             raise FileNotFoundError(f"Không tìm thấy DPO checkpoint để resume: {args.resume}")
+    else:
+        # Tự động tìm checkpoint trong out_dir
+        latest_candidate = out_dir / "latest_dpo_checkpoint.pt"
+        if latest_candidate.exists():
+            resume_file = latest_candidate
+        else:
+            step_files = list(out_dir.glob("dpo_step_*.pt"))
+            if step_files:
+                def extract_step(path: Path) -> int:
+                    try:
+                        return int(path.stem.split("_")[-1])
+                    except ValueError:
+                        return 0
+                step_files.sort(key=extract_step, reverse=True)
+                resume_file = step_files[0]
+
+    if resume_file:
+        print(f"[Auto-Resume DPO] Đang nạp DPO checkpoint từ: {resume_file}")
+        ckpt = torch.load(resume_file, map_location=device, weights_only=False)
+        if "lora_state_dict" in ckpt:
+            raw_policy.load_state_dict(ckpt["lora_state_dict"], strict=False)
+        elif "model_state_dict" in ckpt:
+            raw_policy.load_state_dict(ckpt["model_state_dict"], strict=False)
+
+        if "optimizer_state_dict" in ckpt:
+            try:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume DPO] Cảnh báo không nạp được optimizer state: {e}")
+
+        if "scaler_state_dict" in ckpt and ckpt["scaler_state_dict"] and scaler.is_enabled():
+            try:
+                scaler.load_state_dict(ckpt["scaler_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume DPO] Cảnh báo không nạp được scaler state: {e}")
+
+        start_step = int(ckpt.get("step", 0))
+        print(f"[Auto-Resume DPO] Nạp thành công! Tiếp tục từ Step {start_step + 1}...")
 
     # 6. Vòng lặp huấn luyện DPO
-    print("\n" + "=" * 65)
-    print(f"BẮT ĐẦU HUẤN LUYỆN DPO 100M (BETA={args.beta}, MAX_STEPS={args.max_steps})")
-    print("=" * 65)
-
-    optimizer.zero_grad(set_to_none=True)
-    accum_loss = 0.0
-    accum_c_rew = 0.0
-    accum_r_rew = 0.0
-
-    t0 = time.time()
     steps_to_run = 3 if args.smoke_test else args.max_steps
+    if start_step < steps_to_run:
+        print("\n" + "=" * 65)
+        print(f"BẮT ĐẦU HUẤN LUYỆN DPO 100M (BETA={args.beta}, MAX_STEPS={steps_to_run})")
+        print("=" * 65)
 
-    for step in range(start_step + 1, steps_to_run + 1):
-        for _ in range(args.grad_accum):
-            try:
-                c_x, c_y, r_x, r_y = next(data_iter)
-            except StopIteration:
-                data_iter = iter(dataloader)
-                c_x, c_y, r_x, r_y = next(data_iter)
-
-            c_x, c_y = c_x.to(device), c_y.to(device)
-            r_x, r_y = r_x.to(device), r_y.to(device)
-
-            # 1. Tính logps từ Reference Model (no_grad)
-            with torch.no_grad():
-                with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
-                    ref_chosen_logps = compute_logps(ref_model, c_x, c_y)
-                    ref_rejected_logps = compute_logps(ref_model, r_x, r_y)
-
-            # 2. Tính logps từ Policy Model (có gradient cho LoRA r=32)
-            with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
-                policy_chosen_logps = compute_logps(policy_model, c_x, c_y)
-                policy_rejected_logps = compute_logps(policy_model, r_x, r_y)
-
-                # 3. Tính DPO loss và implicit rewards với hệ số beta=0.1
-                loss, chosen_rewards, rejected_rewards = dpo_loss(
-                    policy_chosen_logps=policy_chosen_logps,
-                    policy_rejected_logps=policy_rejected_logps,
-                    ref_chosen_logps=ref_chosen_logps,
-                    ref_rejected_logps=ref_rejected_logps,
-                    beta=args.beta,
-                )
-                loss_scaled = loss / args.grad_accum
-
-            scaler.scale(loss_scaled).backward()
-
-            accum_loss += loss.item() / args.grad_accum
-            accum_c_rew += chosen_rewards.mean().item() / args.grad_accum
-            accum_r_rew += rejected_rewards.mean().item() / args.grad_accum
-
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
-        scaler.step(optimizer)
-        scaler.update()
         optimizer.zero_grad(set_to_none=True)
+        accum_loss = 0.0
+        accum_c_rew = 0.0
+        accum_r_rew = 0.0
 
-        reward_margin = accum_c_rew - accum_r_rew
+        t0 = time.time()
 
-        if step % 10 == 0 or args.smoke_test:
-            print(
-                f"DPO Step {step:5d}/{steps_to_run} | "
-                f"Loss: {accum_loss:.4f} | "
-                f"Chosen Reward: {accum_c_rew:+.4f} | "
-                f"Rejected Reward: {accum_r_rew:+.4f} | "
-                f"Reward Margin: {reward_margin:+.4f} | "
-                f"Time: {time.time() - t0:.2f}s"
-            )
+        for step in range(start_step + 1, steps_to_run + 1):
+            for _ in range(args.grad_accum):
+                try:
+                    c_x, c_y, r_x, r_y = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(dataloader)
+                    c_x, c_y, r_x, r_y = next(data_iter)
 
-        if step % args.save_every == 0 and not args.smoke_test:
-            ckpt_path = out_dir / f"dpo_step_{step}.pt"
-            torch.save(
-                {
+                c_x, c_y = c_x.to(device), c_y.to(device)
+                r_x, r_y = r_x.to(device), r_y.to(device)
+
+                # 1. Tính logps từ Reference Model (no_grad)
+                with torch.no_grad():
+                    with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                        ref_chosen_logps = compute_logps(ref_model, c_x, c_y)
+                        ref_rejected_logps = compute_logps(ref_model, r_x, r_y)
+
+                # 2. Tính logps từ Policy Model (có gradient cho LoRA r=32)
+                with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                    policy_chosen_logps = compute_logps(policy_model, c_x, c_y)
+                    policy_rejected_logps = compute_logps(policy_model, r_x, r_y)
+
+                    # 3. Tính DPO loss và implicit rewards với hệ số beta=0.1
+                    loss, chosen_rewards, rejected_rewards = dpo_loss(
+                        policy_chosen_logps=policy_chosen_logps,
+                        policy_rejected_logps=policy_rejected_logps,
+                        ref_chosen_logps=ref_chosen_logps,
+                        ref_rejected_logps=ref_rejected_logps,
+                        beta=args.beta,
+                    )
+                    loss_scaled = loss / args.grad_accum
+
+                scaler.scale(loss_scaled).backward()
+
+                accum_loss += loss.item() / args.grad_accum
+                accum_c_rew += chosen_rewards.mean().item() / args.grad_accum
+                accum_r_rew += rejected_rewards.mean().item() / args.grad_accum
+
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
+
+            reward_margin = accum_c_rew - accum_r_rew
+
+            if step % 10 == 0 or args.smoke_test:
+                print(
+                    f"DPO Step {step:5d}/{steps_to_run} | "
+                    f"Loss: {accum_loss:.4f} | "
+                    f"Chosen Reward: {accum_c_rew:+.4f} | "
+                    f"Rejected Reward: {accum_r_rew:+.4f} | "
+                    f"Reward Margin: {reward_margin:+.4f} | "
+                    f"Time: {time.time() - t0:.2f}s"
+                )
+
+            if step % args.save_every == 0 and not args.smoke_test:
+                ckpt_path = out_dir / f"dpo_step_{step}.pt"
+                save_payload = {
                     "step": step,
                     "lora_state_dict": get_lora_state_dict(raw_policy),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
                     "loss": accum_loss,
                     "reward_margin": reward_margin,
-                },
-                ckpt_path,
-            )
-            torch.save(get_lora_state_dict(raw_policy), out_dir / "lora_dpo_adapter.pt")
-            torch.save(
-                {
-                    "step": step,
-                    "lora_state_dict": get_lora_state_dict(raw_policy),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                out_dir / "latest_dpo_checkpoint.pt",
-            )
-            print(f"[Checkpoint] Đã lưu DPO checkpoint tại step {step} ra {ckpt_path}")
+                }
+                torch.save(save_payload, ckpt_path)
+                torch.save(save_payload, out_dir / "latest_dpo_checkpoint.pt")
+                torch.save(get_lora_state_dict(raw_policy), out_dir / "lora_dpo_adapter.pt")
+                print(f"[Checkpoint] Đã lưu DPO checkpoint tại step {step} ra {ckpt_path}")
 
-        accum_loss = 0.0
-        accum_c_rew = 0.0
-        accum_r_rew = 0.0
+            accum_loss = 0.0
+            accum_c_rew = 0.0
+            accum_r_rew = 0.0
+    else:
+        print(f"[DPO] Đã đạt hoặc vượt max_steps={steps_to_run} (hiện tại: {start_step}). Bỏ qua vòng lặp.")
 
     final_adapter_path = out_dir / "lora_dpo_adapter.pt"
     torch.save(get_lora_state_dict(raw_policy), final_adapter_path)
     print("\n" + "=" * 65)
     print("HOÀN THÀNH HUẤN LUYỆN DPO 100M!")
     print(f"DPO LoRA Adapter đã được lưu tại: {final_adapter_path}")
+    print(f"Checkpoint DPO mới nhất tại: {out_dir / 'latest_dpo_checkpoint.pt'}")
     print("=" * 65)
 
 

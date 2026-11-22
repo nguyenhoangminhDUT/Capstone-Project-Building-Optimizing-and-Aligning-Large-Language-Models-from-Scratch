@@ -1,12 +1,16 @@
-"""Pre-training script for 100M LLM on Kaggle (T4 x2 DataParallel, FP16 AMP, Resume Training)."""
+"""Pre-training script for 100M LLM on Kaggle (T4 x2 DataParallel, FP16 AMP, Auto-Resume, Best Model Export)."""
+
+import os
+# CRITICAL: Tránh phân mảnh bộ nhớ VRAM trên GPU T4 x2
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import argparse
+import glob
 import math
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -80,12 +84,12 @@ def parse_args() -> argparse.Namespace:
         help="Thư mục lưu trữ checkpoint mặc định trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới checkpoint .pt để train nối tiếp")
-    parser.add_argument("--max_steps", type=int, default=50000, help="Tổng số bước huấn luyện")
-    parser.add_argument("--batch_size", type=int, default=8, help="Micro batch size per GPU")
-    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate tối đa")
-    parser.add_argument("--warmup_steps", type=int, default=1000, help="Số bước warmup tuyến tính")
-    parser.add_argument("--grad_accum", type=int, default=4, help="Số bước gradient accumulation")
-    parser.add_argument("--save_every", type=int, default=1000, help="Số bước lưu checkpoint định kỳ")
+    parser.add_argument("--max_steps", type=int, default=5000, help="Tổng số bước huấn luyện (mặc định 5,000)")
+    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU (mặc định 4)")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate tối đa (mặc định 3e-4)")
+    parser.add_argument("--warmup_steps", type=int, default=500, help="Số bước warmup tuyến tính")
+    parser.add_argument("--grad_accum", type=int, default=16, help="Số bước gradient accumulation (mặc định 16)")
+    parser.add_argument("--save_every", type=int, default=500, help="Số bước lưu checkpoint định kỳ (mặc định 500)")
     parser.add_argument(
         "--device",
         type=str,
@@ -96,7 +100,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Main pre-training loop for 100M LLM supporting Kaggle T4 x2 Multi-GPU and Resume."""
+    """Main pre-training loop for 100M LLM supporting Kaggle T4 x2 Multi-GPU and Auto-Resume."""
     args = parse_args()
 
     # 1. Cấu hình thư mục lưu checkpoint trên Kaggle (tự động fallback nếu chạy máy local)
@@ -112,7 +116,7 @@ def main() -> None:
     device_type = "cuda" if "cuda" in args.device else "cpu"
     num_gpus = torch.cuda.device_count() if device_type == "cuda" else 0
 
-    block_size = 1024  # Độ dài ngữ cảnh nâng cấp 1024 tokens cho model 100M
+    block_size = 1024  # Độ dài ngữ cảnh 1024 tokens cho model 100M
 
     print(f"Device: {device} | Số GPU khả dụng: {num_gpus}")
     print(f"Micro Batch Size: {args.batch_size} | Grad Accum: {args.grad_accum}")
@@ -174,104 +178,139 @@ def main() -> None:
     )
 
     use_amp = (device_type == "cuda")
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
-    # 5. Tính năng Resume Training
+    # 5. Tính năng Tự động Resume Training
     global_step = 0
+    resume_file: Optional[Path] = None
+
     if args.resume:
-        resume_file = Path(args.resume)
-        if not resume_file.exists() and (REPO_ROOT / resume_file).exists():
-            resume_file = REPO_ROOT / resume_file
-
-        if resume_file.exists():
-            print(f"[Resume] Đang nạp checkpoint từ {resume_file}...")
-            checkpoint = torch.load(resume_file, map_location=device, weights_only=False)
-            sd = checkpoint.get("model_state_dict", checkpoint)
-            # Làm sạch tiền tố module. nếu lưu từ DataParallel
-            clean_sd = {k.replace("module.", ""): v for k, v in sd.items()}
-            raw_model.load_state_dict(clean_sd)
-
-            if "optimizer_state_dict" in checkpoint:
-                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            if "scaler_state_dict" in checkpoint and checkpoint["scaler_state_dict"] and scaler.is_enabled():
-                scaler.load_state_dict(checkpoint["scaler_state_dict"])
-            global_step = int(checkpoint.get("step", 0))
-            print(f"[Resume] Nạp thành công! Tiếp tục huấn luyện từ step {global_step + 1}...")
+        rf = Path(args.resume)
+        if not rf.exists() and (REPO_ROOT / rf).exists():
+            rf = REPO_ROOT / rf
+        if rf.exists():
+            resume_file = rf
         else:
             raise FileNotFoundError(f"Không tìm thấy file checkpoint để resume: {args.resume}")
+    else:
+        # Tự động kiểm tra {out_dir}/latest_checkpoint.pt hoặc checkpoint_step_*.pt mới nhất trong out_dir
+        latest_cand = out_dir / "latest_checkpoint.pt"
+        if latest_cand.exists():
+            resume_file = latest_cand
+        else:
+            step_files = list(out_dir.glob("checkpoint_step_*.pt"))
+            if step_files:
+                def extract_step(path: Path) -> int:
+                    try:
+                        return int(path.stem.split("_")[-1])
+                    except ValueError:
+                        return 0
+                step_files.sort(key=extract_step, reverse=True)
+                resume_file = step_files[0]
+
+    if resume_file:
+        print(f"[Auto-Resume] Đang nạp checkpoint từ: {resume_file}")
+        checkpoint = torch.load(resume_file, map_location=device, weights_only=False)
+        sd = checkpoint.get("model_state_dict", checkpoint)
+        # Làm sạch tiền tố module. nếu checkpoint lưu từ DataParallel
+        clean_sd = {k.replace("module.", ""): v for k, v in sd.items()}
+        raw_model.load_state_dict(clean_sd)
+
+        if "optimizer_state_dict" in checkpoint:
+            try:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume] Cảnh báo không nạp được optimizer state: {e}")
+
+        if "scaler_state_dict" in checkpoint and checkpoint["scaler_state_dict"] and scaler.is_enabled():
+            try:
+                scaler.load_state_dict(checkpoint["scaler_state_dict"])
+            except Exception as e:
+                print(f"[Auto-Resume] Cảnh báo không nạp được scaler state: {e}")
+
+        global_step = int(checkpoint.get("step", 0))
+        print(f"[Auto-Resume] Nạp thành công! Tiếp tục huấn luyện từ step {global_step + 1}...")
 
     # 6. Vòng lặp huấn luyện Pre-training
-    print("\n" + "=" * 65)
-    print(f"BẮT ĐẦU HUẤN LUYỆN PRE-TRAINING 100M (TARGET: {args.max_steps:,} STEPS)")
-    print("=" * 65)
+    if global_step < args.max_steps:
+        print("\n" + "=" * 65)
+        print(f"BẮT ĐẦU HUẤN LUYỆN PRE-TRAINING 100M (TARGET: {args.max_steps:,} STEPS)")
+        print("=" * 65)
 
-    model.train()
-    running_tokens = 0
-    t0 = time.time()
+        model.train()
+        running_tokens = 0
+        t0 = time.time()
 
-    for step in range(global_step + 1, args.max_steps + 1):
-        optimizer.zero_grad(set_to_none=True)
-        accum_loss = 0.0
+        for step in range(global_step + 1, args.max_steps + 1):
+            optimizer.zero_grad(set_to_none=True)
+            accum_loss = 0.0
 
-        current_lr = get_lr(step, args.warmup_steps, args.max_steps, args.lr, min_lr=args.lr * 0.1)
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = current_lr
+            current_lr = get_lr(step, args.warmup_steps, args.max_steps, args.lr, min_lr=args.lr * 0.1)
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = current_lr
 
-        for _ in range(args.grad_accum):
-            try:
-                x, y = next(data_iter)
-            except StopIteration:
-                data_iter = iter(dataloader)
-                x, y = next(data_iter)
+            for _ in range(args.grad_accum):
+                try:
+                    x, y = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(dataloader)
+                    x, y = next(data_iter)
 
-            x, y = x.to(device), y.to(device)
+                x, y = x.to(device), y.to(device)
 
-            # Mixed Precision FP16 cho GPU T4
-            with torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_amp):
-                logits = model(x)
-                # Ép kiểu float32 trước khi tính cross_entropy để tránh tràn số sinh NaN trong FP16
-                logits_f32 = logits.float()
-                loss = F.cross_entropy(logits_f32.view(-1, raw_model.vocab_size), y.view(-1))
-                loss_scaled = loss / args.grad_accum
+                # Mixed Precision FP16 cho GPU T4
+                with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                    logits = model(x)
+                    # Ép kiểu float32 trước khi tính cross_entropy để chống tràn số dưới FP16
+                    logits_f32 = logits.float()
+                    loss = F.cross_entropy(logits_f32.view(-1, raw_model.vocab_size), y.view(-1))
+                    loss_scaled = loss / args.grad_accum
 
-            scaler.scale(loss_scaled).backward()
-            accum_loss += loss.item() / args.grad_accum
-            running_tokens += x.numel()
+                scaler.scale(loss_scaled).backward()
+                accum_loss += loss.item() / args.grad_accum
+                running_tokens += x.numel()
 
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(raw_model.parameters(), max_norm=1.0)
-        scaler.step(optimizer)
-        scaler.update()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(raw_model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
 
-        # Log tiến trình mỗi 50 bước
-        if step % 50 == 0 or step == 1 or step == args.max_steps:
-            elapsed = time.time() - t0
-            tokens_per_sec = running_tokens / elapsed if elapsed > 0 else 0.0
-            print(
-                f"Step {step:6d}/{args.max_steps} | Loss: {accum_loss:.4f} | "
-                f"LR: {current_lr:.2e} | Speed: {tokens_per_sec:,.0f} tok/s"
-            )
-            running_tokens = 0
-            t0 = time.time()
+            # Log tiến trình mỗi 50 bước
+            if step % 50 == 0 or step == 1 or step == args.max_steps:
+                elapsed = time.time() - t0
+                tokens_per_sec = running_tokens / elapsed if elapsed > 0 else 0.0
+                print(
+                    f"Step {step:6d}/{args.max_steps} | Loss: {accum_loss:.4f} | "
+                    f"LR: {current_lr:.2e} | Speed: {tokens_per_sec:,.0f} tok/s"
+                )
+                running_tokens = 0
+                t0 = time.time()
 
-        # Lưu checkpoint định kỳ cho Kaggle (giới hạn 12h)
-        if step % args.save_every == 0 or step == args.max_steps:
-            ckpt_path = out_dir / f"checkpoint_step_{step}.pt"
-            latest_path = out_dir / "latest_checkpoint.pt"
-            checkpoint_data = {
-                "step": step,
-                "model_state_dict": raw_model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
-                "loss": accum_loss,
-            }
-            torch.save(checkpoint_data, ckpt_path)
-            torch.save(checkpoint_data, latest_path)
-            print(f"[Checkpoint] Đã lưu checkpoint tại step {step} ra {ckpt_path}")
+            # Lưu checkpoint định kỳ cho Kaggle (giới hạn 12h)
+            if step % args.save_every == 0 or step == args.max_steps:
+                ckpt_path = out_dir / f"checkpoint_step_{step}.pt"
+                latest_path = out_dir / "latest_checkpoint.pt"
+                checkpoint_data = {
+                    "step": step,
+                    "model_state_dict": raw_model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
+                    "loss": accum_loss,
+                }
+                torch.save(checkpoint_data, ckpt_path)
+                torch.save(checkpoint_data, latest_path)
+                print(f"[Checkpoint] Đã lưu checkpoint tại step {step} ra {ckpt_path}")
+    else:
+        print(f"[Pre-training] Đã đạt hoặc vượt max_steps={args.max_steps} (hiện tại: {global_step}). Bỏ qua vòng lặp.")
+
+    # 7. Xuất Base Model: bắt buộc lưu thêm file {out_dir}/best_model.pt
+    best_model_path = out_dir / "best_model.pt"
+    torch.save({"model_state_dict": raw_model.state_dict()}, best_model_path)
+    print(f"[Export] Đã lưu Base Model hoàn chỉnh (đã bỏ module.) tại: {best_model_path}")
 
     print("\n" + "=" * 65)
     print("HOÀN THÀNH HUẤN LUYỆN PRE-TRAINING 100M!")
-    print(f"Checkpoint cuối cùng được lưu tại: {out_dir / 'latest_checkpoint.pt'}")
+    print(f"Base model đã sẵn sàng cho bước SFT tại: {best_model_path}")
     print("=" * 65)
 
 
