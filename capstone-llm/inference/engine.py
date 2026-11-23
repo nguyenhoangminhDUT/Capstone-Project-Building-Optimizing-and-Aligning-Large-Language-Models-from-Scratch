@@ -262,13 +262,13 @@ def load_model_for_inference(
             elif "model_state_dict" in lora_raw:
                 lora_raw = lora_raw["model_state_dict"]
 
-            # Chỉ lọc lấy các key có chứa lora_A và lora_B
+            # Chỉ lọc lấy các key có chứa lora_ hoặc embedding.weight
             lora_weights = {
                 k.replace("module.", ""): v for k, v in lora_raw.items()
-                if "lora_A" in k or "lora_B" in k
+                if "lora_" in k or "embedding.weight" in k
             }
             model.load_state_dict(lora_weights, strict=False)
-            print(f"[Engine] Nạp thành công {len(lora_weights)} tensors LoRA adapter!")
+            print(f"[Engine] Nạp thành công {len(lora_weights)} tensors LoRA adapter & Embedding!")
         else:
             print(f"[Engine] Cảnh báo: Không tìm thấy LoRA checkpoint tại {lora_checkpoint_path}")
 

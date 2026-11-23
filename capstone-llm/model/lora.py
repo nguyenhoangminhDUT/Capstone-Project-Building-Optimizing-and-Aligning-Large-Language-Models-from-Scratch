@@ -110,8 +110,22 @@ def merge_lora(model: nn.Module) -> None:
 
 
 def get_lora_state_dict(model: nn.Module) -> Dict[str, torch.Tensor]:
-    """Extract only trainable LoRA adapter weights (lora_A, lora_B) for compact checkpoint storage."""
-    return {k: v for k, v in model.state_dict().items() if "lora_A" in k or "lora_B" in k}
+    """
+    Trích xuất trọng số LoRA và Embedding để lưu checkpoint gọn nhẹ:
+    - Chỉ lưu các key có chứa 'lora_' hoặc 'embedding.weight'.
+    - Bỏ qua 'lm_head.weight' để tránh trùng lặp với Weight Tying.
+    - Luôn lưu 'embedding.weight' bất kể trạng thái requires_grad để adapter tự chứa
+      đầy đủ biểu diễn từ vựng khi nạp độc lập lên base model.
+    """
+    state_dict = model.state_dict()
+    lora_dict = {}
+    for k, v in state_dict.items():
+        clean_k = k.replace("module.", "")
+        if "lm_head.weight" in clean_k:
+            continue
+        if "lora_" in clean_k or clean_k == "embedding.weight" or clean_k.endswith(".embedding.weight"):
+            lora_dict[clean_k] = v
+    return lora_dict
 
 
 if __name__ == "__main__":

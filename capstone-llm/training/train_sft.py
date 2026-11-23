@@ -210,7 +210,7 @@ def parse_args() -> argparse.Namespace:
         help="Thư mục lưu SFT checkpoints trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới SFT checkpoint để train nối tiếp")
-    parser.add_argument("--epochs", type=int, default=2, help="Số epoch huấn luyện SFT (mặc định 2 epochs)")
+    parser.add_argument("--epochs", type=int, default=3, help="Số epoch huấn luyện SFT (mặc định 3 epochs)")
     parser.add_argument("--max_samples", type=int, default=20000, help="Số lượng mẫu tải từ yahma/alpaca-cleaned")
     parser.add_argument("--math_samples", type=int, default=10000, help="Số lượng mẫu toán học tự sinh (1-2 chữ số)")
     parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU (mặc định 4)")
@@ -256,9 +256,16 @@ def main() -> None:
     if not tokenizer_path.exists() and (REPO_ROOT / tokenizer_path).exists():
         tokenizer_path = REPO_ROOT / tokenizer_path
     if not tokenizer_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
-    tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
+        if args.smoke_test:
+            from tokenizers import Tokenizer, models
+            tokenizer = Tokenizer(models.BPE())
+            tokenizer.add_special_tokens(["<|unk|>", "<|pad|>", "<|bos|>", "<|eos|>"])
+            print("[Tokenizer] Đang dùng dummy tokenizer cho smoke test (vocab_size=4).")
+        else:
+            raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
 
     # 3. Chuẩn bị tập dữ liệu: Alpaca (20,000) + Toán học tự sinh (10,000)
     if args.smoke_test or load_dataset is None:
@@ -330,6 +337,10 @@ def main() -> None:
     # 5. Gắn LoRA với rank r=32, alpha=64 cho mô hình 100M
     apply_lora(base_model, r=args.lora_r, alpha=args.lora_alpha)
 
+    # Mở khóa lớp Embedding/LM Head trong giai đoạn SFT (Weight Tying tự động mở khóa cả lm_head.weight)
+    base_model.embedding.weight.requires_grad_(True)
+    print(f"[SFT Training] Đã mở khóa Embedding/LM Head: requires_grad={base_model.embedding.weight.requires_grad}")
+
     # Multi-GPU DataParallel cho Kaggle T4 x2
     if device_type == "cuda" and num_gpus > 1:
         print(f"[Multi-GPU] Bọc mô hình bằng torch.nn.DataParallel qua {num_gpus} GPUs.")
@@ -339,9 +350,24 @@ def main() -> None:
 
     raw_model = model.module if isinstance(model, torch.nn.DataParallel) else model
 
-    # 6. Khởi tạo Optimizer (chỉ tối ưu các tham số LoRA có requires_grad = True)
-    trainable_params = [p for p in raw_model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
+    # 6. Khởi tạo Optimizer: tách 2 nhóm tham số
+    # Nhóm 1: các tham số chứa "lora_" dùng lr=args.lr (weight_decay=0.01)
+    # Nhóm 2: [raw_model.embedding.weight] dùng lr=args.lr * 0.25 (weight_decay=0.0) để tránh xáo trộn biểu diễn từ vựng nền tảng
+    lora_params = [p for n, p in raw_model.named_parameters() if p.requires_grad and "lora_" in n]
+    embed_params = [raw_model.embedding.weight]
+
+    optim_groups = [
+        {"params": lora_params, "lr": args.lr, "weight_decay": 0.01},
+        {"params": embed_params, "lr": args.lr * 0.25, "weight_decay": 0.0},
+    ]
+    optimizer = torch.optim.AdamW(optim_groups, betas=(0.9, 0.95))
+
+    trainable_params = lora_params + embed_params
+    total_trainable = sum(p.numel() for p in trainable_params)
+    print(
+        f"[SFT Optimizer] Tổng tham số train: {total_trainable:,} "
+        f"(LoRA: {sum(p.numel() for p in lora_params):,}, Embedding: {raw_model.embedding.weight.numel():,})"
+    )
 
     use_amp = (device_type == "cuda")
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -445,7 +471,7 @@ def main() -> None:
                 if global_step % 20 == 0 or args.smoke_test:
                     print(
                         f"Epoch {epoch:2d}/{args.epochs} | Step {global_step:5d} | "
-                        f"Loss: {accum_loss:.4f} | LR: {optimizer.param_groups[0]['lr']:.2e}"
+                        f"Loss: {accum_loss:.4f} | LR LoRA: {optimizer.param_groups[0]['lr']:.2e} | LR Embed: {optimizer.param_groups[1]['lr']:.2e}"
                     )
 
                 if global_step % args.save_every == 0 and not args.smoke_test:

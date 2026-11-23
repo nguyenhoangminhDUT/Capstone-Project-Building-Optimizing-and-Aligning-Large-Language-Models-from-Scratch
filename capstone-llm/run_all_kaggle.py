@@ -174,7 +174,7 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size")
     parser.add_argument("--grad_accum", type=int, default=16, help="Gradient accumulation steps")
     parser.add_argument("--pretrain_steps", type=int, default=5000, help="Số bước pre-training")
-    parser.add_argument("--sft_epochs", type=int, default=2, help="Số epoch SFT")
+    parser.add_argument("--sft_epochs", type=int, default=3, help="Số epoch SFT (mặc định 3)")
     parser.add_argument("--dpo_steps", type=int, default=1000, help="Số bước DPO")
     parser.add_argument("--dry_run", action="store_true", help="Chỉ kiểm tra cấu hình mà không chạy huấn luyện")
     parser.add_argument("--smoke_test", action="store_true", help="Chạy chế độ thử nghiệm siêu nhanh (vài step)")
@@ -252,8 +252,8 @@ def main() -> None:
             "--sft_ckpt", str(sft_adapter_path),
             "--max_steps", str(3 if args.smoke_test else args.dpo_steps),
             "--beta", "0.1",
-            "--batch_size", str(args.batch_size),
-            "--grad_accum", str(args.grad_accum),
+            "--batch_size", "1",
+            "--grad_accum", "64",
             "--out_dir", str(work_root / "capstone_checkpoints" / "dpo"),
         ]
         if args.smoke_test:

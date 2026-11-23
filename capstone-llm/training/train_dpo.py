@@ -215,8 +215,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới DPO checkpoint để resume")
     parser.add_argument("--max_steps", type=int, default=1000, help="Tổng số bước huấn luyện DPO (mặc định 1,000)")
     parser.add_argument("--max_samples", type=int, default=5000, help="Số lượng mẫu tải từ Anthropic/hh-rlhf")
-    parser.add_argument("--batch_size", type=int, default=4, help="Micro batch size per GPU (mặc định 4)")
-    parser.add_argument("--grad_accum", type=int, default=16, help="Gradient accumulation steps (mặc định 16)")
+    parser.add_argument("--batch_size", type=int, default=1, help="Micro batch size per GPU (mặc định 1)")
+    parser.add_argument("--grad_accum", type=int, default=64, help="Gradient accumulation steps (mặc định 64)")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate cho policy LoRA (mặc định 1e-4)")
     parser.add_argument("--beta", type=float, default=0.1, help="Hệ số DPO beta nhiệt độ (mặc định 0.1)")
     parser.add_argument("--lora_r", type=int, default=32, help="LoRA rank r (mặc định 32 cho model 100M)")
@@ -259,9 +259,16 @@ def main() -> None:
     if not tokenizer_path.exists() and (REPO_ROOT / tokenizer_path).exists():
         tokenizer_path = REPO_ROOT / tokenizer_path
     if not tokenizer_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
-    tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
+        if args.smoke_test:
+            from tokenizers import Tokenizer, models
+            tokenizer = Tokenizer(models.BPE())
+            tokenizer.add_special_tokens(["<|unk|>", "<|pad|>", "<|bos|>", "<|eos|>"])
+            print("[Tokenizer] Đang dùng dummy tokenizer cho smoke test (vocab_size=4).")
+        else:
+            raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
 
     # 3. Tải dataset Anthropic/hh-rlhf (5,000 mẫu)
     if args.smoke_test or load_dataset is None:
@@ -357,6 +364,18 @@ def main() -> None:
     else:
         print("[SFT Checkpoint] Cảnh báo: Không tìm thấy checkpoint SFT, sử dụng trọng số ban đầu.")
 
+    # Đảm bảo CHỈ các tham số chứa "lora_" trong policy_model có requires_grad = True.
+    # Đóng băng embedding.weight trong suốt DPO để ổn định phân phối từ vựng và tiết kiệm VRAM.
+    for name, param in base_policy.named_parameters():
+        if "lora_" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
+
+    print(f"[DPO Policy Model] Trạng thái Embedding: requires_grad={base_policy.embedding.weight.requires_grad}")
+    trainable_dpo = sum(p.numel() for p in base_policy.parameters() if p.requires_grad)
+    print(f"[DPO Policy Model] Số tham số huấn luyện (chỉ LoRA): {trainable_dpo:,}")
+
     # CRITICAL: Reference model đóng băng 100% tham số và chuyển sang chế độ eval()
     base_ref.eval()
     for p in base_ref.parameters():
@@ -446,8 +465,9 @@ def main() -> None:
 
         t0 = time.time()
 
+        effective_grad_accum = 1 if args.smoke_test else args.grad_accum
         for step in range(start_step + 1, steps_to_run + 1):
-            for _ in range(args.grad_accum):
+            for _ in range(effective_grad_accum):
                 try:
                     c_x, c_y, r_x, r_y = next(data_iter)
                 except StopIteration:
@@ -476,13 +496,13 @@ def main() -> None:
                         ref_rejected_logps=ref_rejected_logps,
                         beta=args.beta,
                     )
-                    loss_scaled = loss / args.grad_accum
+                    loss_scaled = loss / effective_grad_accum
 
                 scaler.scale(loss_scaled).backward()
 
-                accum_loss += loss.item() / args.grad_accum
-                accum_c_rew += chosen_rewards.mean().item() / args.grad_accum
-                accum_r_rew += rejected_rewards.mean().item() / args.grad_accum
+                accum_loss += loss.item() / effective_grad_accum
+                accum_c_rew += chosen_rewards.mean().item() / effective_grad_accum
+                accum_r_rew += rejected_rewards.mean().item() / effective_grad_accum
 
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)

@@ -148,3 +148,26 @@ def test_kv_cache_generation_identical() -> None:
     )
 
     assert tokens_cached == tokens_baseline, "KV Cache output must strictly match full baseline!"
+
+
+def test_get_lora_state_dict_with_embedding() -> None:
+    """Verify get_lora_state_dict extracts lora_* and embedding.weight, but omits lm_head.weight."""
+    from model.lora import get_lora_state_dict
+    model = Transformer(
+        vocab_size=100,
+        d_model=32,
+        n_layers=2,
+        n_heads=2,
+        d_ff=64,
+        max_seq_len=32,
+    )
+    apply_lora(model, r=4, alpha=8.0)
+    # Kiểm tra kịch bản DPO: embedding.weight có requires_grad=False nhưng vẫn được lưu
+    model.embedding.weight.requires_grad_(False)
+    state = get_lora_state_dict(model)
+
+    assert "embedding.weight" in state, "embedding.weight must always be present in get_lora_state_dict!"
+    assert "lm_head.weight" not in state, "lm_head.weight must NOT be duplicated in get_lora_state_dict!"
+    assert any("lora_A" in k for k in state), "lora_A must be present in get_lora_state_dict!"
+    assert any("lora_B" in k for k in state), "lora_B must be present in get_lora_state_dict!"
+    assert not any("layers.0.attn.k_proj.weight" in k for k in state), "Base weights must not be in get_lora_state_dict!"
