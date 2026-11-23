@@ -1,10 +1,12 @@
 """Autoregressive text generation engine supporting KV Cache, Repetition Penalty, Top-p, and Guardrails."""
 
+import math
 import sys
 from pathlib import Path
 from typing import List, Optional, Union
 import torch
 import torch.nn.functional as F
+from tokenizers import Tokenizer
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -359,9 +361,6 @@ class LLMInferenceEngine:
         lora_r: int = 32,
         lora_alpha: float = 64.0,
     ) -> None:
-        import math
-        self.math = math
-
         if device is None:
             self.device = torch.device(
                 "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
@@ -373,7 +372,6 @@ class LLMInferenceEngine:
             tok_path = Path(tokenizer)
             if not tok_path.exists() and (REPO_ROOT / tok_path).exists():
                 tok_path = REPO_ROOT / tok_path
-            from tokenizers import Tokenizer
             self.tokenizer = Tokenizer.from_file(str(tok_path))
         elif tokenizer is not None:
             self.tokenizer = tokenizer
@@ -385,7 +383,6 @@ class LLMInferenceEngine:
             ]
             for c in cand:
                 if c.exists():
-                    from tokenizers import Tokenizer
                     self.tokenizer = Tokenizer.from_file(str(c))
                     break
 
@@ -482,12 +479,10 @@ class LLMInferenceEngine:
             return float("nan")
 
         avg_loss = total_loss / total_tokens
-        return self.math.exp(min(avg_loss, 20.0))
+        return math.exp(min(avg_loss, 20.0))
 
 
 if __name__ == "__main__":
-    from tokenizers import Tokenizer
-
     print("=" * 65)
     print("CHẠY SMOKE TEST ENGINE 100M (TOP-P, REPETITION PENALTY, EOS)")
     print("=" * 65)

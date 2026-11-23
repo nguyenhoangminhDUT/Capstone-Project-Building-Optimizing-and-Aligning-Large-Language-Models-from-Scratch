@@ -256,16 +256,19 @@ def main() -> None:
     if not tokenizer_path.exists() and (REPO_ROOT / tokenizer_path).exists():
         tokenizer_path = REPO_ROOT / tokenizer_path
     if not tokenizer_path.exists():
-        if args.smoke_test:
-            from tokenizers import Tokenizer, models
-            tokenizer = Tokenizer(models.BPE())
-            tokenizer.add_special_tokens(["<|unk|>", "<|pad|>", "<|bos|>", "<|eos|>"])
-            print("[Tokenizer] Đang dùng dummy tokenizer cho smoke test (vocab_size=4).")
-        else:
-            raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
-    else:
-        tokenizer = Tokenizer.from_file(str(tokenizer_path))
-        print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
+        for cand in [
+            REPO_ROOT / "tokenizer" / "tokenizer.json",
+            Path("tokenizer/tokenizer.json"),
+            Path("/kaggle/working/tokenizer.json"),
+        ]:
+            if cand.exists():
+                tokenizer_path = cand
+                break
+    if not tokenizer_path.exists():
+        raise FileNotFoundError(f"Không tìm thấy file tokenizer tại: {args.tokenizer}")
+
+    tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    print(f"[Tokenizer] Nạp thành công từ {tokenizer_path} (vocab_size={tokenizer.get_vocab_size():,})")
 
     # 3. Chuẩn bị tập dữ liệu: Alpaca (20,000) + Toán học tự sinh (10,000)
     if args.smoke_test or load_dataset is None:
