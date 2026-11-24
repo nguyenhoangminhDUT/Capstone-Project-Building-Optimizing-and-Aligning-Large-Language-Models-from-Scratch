@@ -271,7 +271,10 @@ def main() -> None:
         "--dpo_ckpt", str(dpo_adapter_path),
         "--out_dir", str(work_root / "eval"),
     ]
-    run_command(eval_cmd, desc="Bước 5/5: Đánh giá định lượng 3 phiên bản (Validation PPL, Math Pass@1, Safety Refusal)")
+    full_sft_path = work_root / "capstone_checkpoints" / "sft" / "full_sft_model.pt"
+    if full_sft_path.exists():
+        eval_cmd.extend(["--full_ft_ckpt", str(full_sft_path)])
+    run_command(eval_cmd, desc="Bước 5/5: Đánh giá định lượng các phiên bản (Validation PPL, Math Pass@1, Safety Refusal)")
 
     print("\n" + "=" * 75)
     print("HOÀN TẤT TOÀN BỘ PIPELINE CAPSTONE TRÊN KAGGLE!")

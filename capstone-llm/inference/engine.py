@@ -194,6 +194,21 @@ def generate(
     return generated
 
 
+def is_full_ft_checkpoint(data: object) -> bool:
+    """Kiểm tra xem checkpoint có phải là mô hình Full Fine-Tuning hay không."""
+    if not isinstance(data, dict):
+        return False
+    if data.get("mode") == "full_ft":
+        return True
+    sd = data.get("model_state_dict", data)
+    if isinstance(sd, dict):
+        has_lora = any("lora_" in k for k in sd.keys())
+        has_full_weights = any("layers.0.attn.q_proj.weight" in k or "layers.0.ffn.w1.weight" in k for k in sd.keys())
+        if has_full_weights and not has_lora:
+            return True
+    return False
+
+
 def load_model_for_inference(
     base_model_path: Optional[str] = None,
     lora_checkpoint_path: Optional[str] = None,
@@ -210,10 +225,13 @@ def load_model_for_inference(
     """
     Nạp mô hình Transformer 100M hoàn chỉnh phục vụ suy luận / demo:
     1. Khởi tạo Transformer gốc theo kiến trúc 100M (GPT-2 Small scale).
-    2. Nạp base weights từ base_model_path (nếu được cung cấp).
-    3. Gọi apply_lora với rank r=32, alpha=64.
-    4. Nạp trọng số LoRA từ lora_checkpoint_path (chỉ lấy các key có chứa 'lora_A' và 'lora_B').
-    5. Chuyển sang model.eval() và trả về model.
+    2. Nếu checkpoint là Full FT (mode == "full_ft" hoặc chứa toàn bộ trọng số gốc mà không có "lora_"):
+       - Nạp trực tiếp vào Transformer mà KHÔNG gọi apply_lora.
+    3. Ngược lại (LoRA / Base):
+       - Nạp base weights từ base_model_path (nếu có).
+       - Gọi apply_lora với rank r=32, alpha=64.
+       - Nạp trọng số LoRA từ lora_checkpoint_path (chỉ lấy key có chứa 'lora_' hoặc 'embedding.weight').
+    4. Chuyển sang model.eval() và trả về model.
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
@@ -231,47 +249,73 @@ def load_model_for_inference(
         dropout=0.0,
     )
 
-    # 2. Nạp base weights nếu có
-    if base_model_path:
-        base_p = Path(base_model_path)
-        if not base_p.exists() and (REPO_ROOT / base_p).exists():
-            base_p = REPO_ROOT / base_p
+    def resolve_path(p: Optional[str]) -> Optional[Path]:
+        if not p:
+            return None
+        path = Path(p)
+        if path.exists():
+            return path
+        if (REPO_ROOT / path).exists():
+            return REPO_ROOT / path
+        return None
 
-        if base_p.exists():
-            print(f"[Engine] Đang nạp base model weights từ {base_p}...")
-            state = torch.load(base_p, map_location="cpu", weights_only=False)
-            sd = state.get("model_state_dict", state)
+    base_p = resolve_path(base_model_path)
+    lora_p = resolve_path(lora_checkpoint_path)
+
+    base_raw = None
+    if base_p and base_p.exists():
+        try:
+            base_raw = torch.load(base_p, map_location="cpu", weights_only=False)
+        except Exception as e:
+            print(f"[Engine] Cảnh báo lỗi nạp base checkpoint ({e})")
+
+    lora_raw = None
+    if lora_p and lora_p.exists():
+        try:
+            lora_raw = torch.load(lora_p, map_location="cpu", weights_only=False)
+        except Exception as e:
+            print(f"[Engine] Cảnh báo lỗi nạp lora checkpoint ({e})")
+
+    # Kiểm tra Full Fine-Tuning (có thể truyền qua lora_checkpoint_path hoặc base_model_path)
+    is_full_ft = False
+    full_ft_data = None
+
+    if lora_raw is not None and is_full_ft_checkpoint(lora_raw):
+        is_full_ft = True
+        full_ft_data = lora_raw
+    elif base_raw is not None and is_full_ft_checkpoint(base_raw) and lora_checkpoint_path is None:
+        is_full_ft = True
+        full_ft_data = base_raw
+
+    if is_full_ft:
+        # Chế độ Full Fine-Tuning: nạp trực tiếp toàn bộ trọng số mà KHÔNG gọi apply_lora
+        sd = full_ft_data.get("model_state_dict", full_ft_data)
+        clean_sd = {k.replace("module.", ""): v for k, v in sd.items()}
+        model.load_state_dict(clean_sd)
+        print("[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!")
+    else:
+        # Nạp base model weights nếu có
+        if base_raw is not None:
+            sd = base_raw.get("model_state_dict", base_raw)
             clean_sd = {k.replace("module.", ""): v for k, v in sd.items()}
             model.load_state_dict(clean_sd)
-            print("[Engine] Nạp base model weights thành công!")
-        else:
+            print(f"[Engine] Nạp base model weights thành công từ {base_p}!")
+        elif base_model_path:
             print(f"[Engine] Cảnh báo: Không tìm thấy base checkpoint tại {base_model_path}")
 
-    # 3. Gắn LoRA r=32, alpha=64
-    apply_lora(model, r=lora_r, alpha=lora_alpha)
+        # Gắn LoRA
+        apply_lora(model, r=lora_r, alpha=lora_alpha)
 
-    # 4. Nạp trọng số LoRA từ lora_checkpoint_path
-    if lora_checkpoint_path:
-        lora_p = Path(lora_checkpoint_path)
-        if not lora_p.exists() and (REPO_ROOT / lora_p).exists():
-            lora_p = REPO_ROOT / lora_p
-
-        if lora_p.exists():
-            print(f"[Engine] Đang nạp LoRA weights từ {lora_p}...")
-            lora_raw = torch.load(lora_p, map_location="cpu", weights_only=False)
-            if "lora_state_dict" in lora_raw:
-                lora_raw = lora_raw["lora_state_dict"]
-            elif "model_state_dict" in lora_raw:
-                lora_raw = lora_raw["model_state_dict"]
-
-            # Chỉ lọc lấy các key có chứa lora_ hoặc embedding.weight
+        # Nạp trọng số LoRA nếu có
+        if lora_raw is not None:
+            sd = lora_raw.get("lora_state_dict", lora_raw.get("model_state_dict", lora_raw))
             lora_weights = {
-                k.replace("module.", ""): v for k, v in lora_raw.items()
+                k.replace("module.", ""): v for k, v in sd.items()
                 if "lora_" in k or "embedding.weight" in k
             }
             model.load_state_dict(lora_weights, strict=False)
             print(f"[Engine] Nạp thành công {len(lora_weights)} tensors LoRA adapter & Embedding!")
-        else:
+        elif lora_checkpoint_path:
             print(f"[Engine] Cảnh báo: Không tìm thấy LoRA checkpoint tại {lora_checkpoint_path}")
 
     model.to(device)

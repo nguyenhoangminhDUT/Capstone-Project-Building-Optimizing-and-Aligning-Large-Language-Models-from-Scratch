@@ -202,6 +202,12 @@ def evaluate_safety_refusal(engine: LLMInferenceEngine, safety_prompts: List[str
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Đánh giá định lượng toàn diện Capstone LLM (Base vs SFT vs DPO)")
     parser.add_argument("--base_ckpt", type=str, default=None, help="Đường dẫn base model checkpoint (best_model.pt)")
+    parser.add_argument(
+        "--full_ft_ckpt",
+        type=str,
+        default=None,
+        help="Đường dẫn Full Fine-Tuning model checkpoint (full_sft_model.pt)",
+    )
     parser.add_argument("--sft_ckpt", type=str, default=None, help="Đường dẫn SFT LoRA checkpoint (lora_sft_adapter.pt)")
     parser.add_argument("--dpo_ckpt", type=str, default=None, help="Đường dẫn DPO LoRA checkpoint (lora_dpo_adapter.pt)")
     parser.add_argument("--tokenizer", type=str, default="tokenizer/tokenizer.json", help="Đường dẫn tokenizer.json")
@@ -243,6 +249,10 @@ def main() -> None:
         "checkpoints/pretrain/best_model.pt",
         "checkpoints/pretrain/latest_checkpoint.pt",
     ])
+    full_ft_ckpt = resolve_path(args.full_ft_ckpt, [
+        "/kaggle/working/capstone_checkpoints/sft/full_sft_model.pt",
+        "checkpoints/sft/full_sft_model.pt",
+    ])
     sft_ckpt = resolve_path(args.sft_ckpt, [
         "/kaggle/working/capstone_checkpoints/sft/lora_sft_adapter.pt",
         "/kaggle/working/capstone_checkpoints/sft/latest_sft_checkpoint.pt",
@@ -258,7 +268,7 @@ def main() -> None:
         "tokenizer/tokenizer.json",
     ])
 
-    print(f"[Checkpoints]\n  - Base : {base_ckpt}\n  - SFT  : {sft_ckpt}\n  - DPO  : {dpo_ckpt}")
+    print(f"[Checkpoints]\n  - Base   : {base_ckpt}\n  - Full FT: {full_ft_ckpt}\n  - SFT    : {sft_ckpt}\n  - DPO    : {dpo_ckpt}")
     print(f"  - Tokenizer: {tokenizer_path}\n")
 
     # 2. Tải tập kiểm tra
@@ -266,13 +276,23 @@ def main() -> None:
     math_problems = FIXED_MATH_PROBLEMS
     safety_prompts = SAFETY_TEST_PROMPTS
 
-    # 3. Định nghĩa cấu hình 3 phiên bản mô hình cần đánh giá
+    # 3. Định nghĩa cấu hình các phiên bản mô hình cần đánh giá
     models_to_eval = [
         {
             "name": "Base (100M)",
             "base_model_path": base_ckpt,
             "lora_checkpoint_path": None,
         },
+    ]
+
+    if full_ft_ckpt is not None:
+        models_to_eval.append({
+            "name": "SFT (Full Fine-Tuning)",
+            "base_model_path": full_ft_ckpt,
+            "lora_checkpoint_path": None,
+        })
+
+    models_to_eval.extend([
         {
             "name": "SFT (Instruct + Math)",
             "base_model_path": base_ckpt,
@@ -283,7 +303,7 @@ def main() -> None:
             "base_model_path": base_ckpt,
             "lora_checkpoint_path": dpo_ckpt,
         },
-    ]
+    ])
 
     results: Dict[str, Dict[str, float]] = {}
 
@@ -326,12 +346,12 @@ def main() -> None:
         }
 
     # 4. In bảng so sánh định lượng (Console & Markdown Table)
-    table_header = f"| {'Model Variant':<24} | {'Validation PPL (↓)':<20} | {'Math Pass@1 (%) (↑)':<20} | {'Safety Refusal Rate (%) (↑)':<28} |"
-    table_divider = f"|{'-'*26}|{'-'*22}|{'-'*22}|{'-'*30}|"
+    table_header = f"| {'Model Variant':<26} | {'Validation PPL (↓)':<20} | {'Math Pass@1 (%) (↑)':<20} | {'Safety Refusal Rate (%) (↑)':<28} |"
+    table_divider = f"|{'-'*28}|{'-'*22}|{'-'*22}|{'-'*30}|"
     rows = []
     for m_name, metrics in results.items():
         row_str = (
-            f"| {m_name:<24} | "
+            f"| {m_name:<26} | "
             f"{metrics['validation_ppl']:<20.2f} | "
             f"{metrics['math_pass1_pct']:<20.1f} | "
             f"{metrics['safety_refusal_rate_pct']:<28.1f} |"

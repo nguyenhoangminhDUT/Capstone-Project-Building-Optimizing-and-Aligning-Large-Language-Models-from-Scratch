@@ -43,6 +43,10 @@ def get_inference_engine(model_type: str, device: str = "cpu") -> LLMInferenceEn
         "checkpoints/pretrain/best_model.pt",
         "checkpoints/pretrain/latest_checkpoint.pt",
     ]
+    full_sft_candidates = [
+        "/kaggle/working/capstone_checkpoints/sft/full_sft_model.pt",
+        "checkpoints/sft/full_sft_model.pt",
+    ]
     sft_candidates = [
         "/kaggle/working/capstone_checkpoints/sft/lora_sft_adapter.pt",
         "/kaggle/working/capstone_checkpoints/sft/latest_sft_checkpoint.pt",
@@ -65,6 +69,11 @@ def get_inference_engine(model_type: str, device: str = "cpu") -> LLMInferenceEn
         lora_ckpt = find_checkpoint(dpo_candidates)
     elif model_type == "SFT (Instruct + Math)":
         lora_ckpt = find_checkpoint(sft_candidates)
+    elif model_type == "SFT (Full Fine-Tuning)":
+        full_sft_ckpt = find_checkpoint(full_sft_candidates)
+        if full_sft_ckpt:
+            base_ckpt = full_sft_ckpt
+        lora_ckpt = None
     else:  # Base
         lora_ckpt = None
 
@@ -117,7 +126,7 @@ def create_app(device: str = "cpu") -> gr.Blocks:
 
     additional_inputs = [
         gr.Dropdown(
-            choices=["DPO (Aligned + Safe)", "SFT (Instruct + Math)", "Base (100M)"],
+            choices=["DPO (Aligned + Safe)", "SFT (Instruct + Math)", "SFT (Full Fine-Tuning)", "Base (100M)"],
             value="DPO (Aligned + Safe)",
             label="Chọn Phiên Bản Mô Hình",
             info="So sánh sự khác biệt giữa mô hình gốc, sau tinh chỉnh chỉ dẫn toán học và căn chỉnh an toàn.",

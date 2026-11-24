@@ -171,3 +171,52 @@ def test_get_lora_state_dict_with_embedding() -> None:
     assert any("lora_A" in k for k in state), "lora_A must be present in get_lora_state_dict!"
     assert any("lora_B" in k for k in state), "lora_B must be present in get_lora_state_dict!"
     assert not any("layers.0.attn.k_proj.weight" in k for k in state), "Base weights must not be in get_lora_state_dict!"
+
+
+def test_load_model_for_inference_full_ft_vs_lora(tmp_path: Path) -> None:
+    """Verify load_model_for_inference bypasses LoRA for Full FT checkpoints and applies LoRA for LoRA adapters."""
+    from inference.engine import load_model_for_inference
+
+    # 1. Full FT Checkpoint (chứa mode='full_ft' hoặc full model weights không có lora_)
+    full_ft_path = tmp_path / "full_sft_model.pt"
+    dummy_model = Transformer(
+        vocab_size=64,
+        d_model=32,
+        n_layers=1,
+        n_heads=2,
+        d_ff=64,
+        max_seq_len=32,
+    )
+    torch.save(
+        {"model_state_dict": dummy_model.state_dict(), "mode": "full_ft"},
+        full_ft_path,
+    )
+
+    # Nạp Full FT: không được gắn LoRA
+    loaded_full_ft = load_model_for_inference(
+        base_model_path=str(full_ft_path),
+        vocab_size=64,
+        d_model=32,
+        n_layers=1,
+        n_heads=2,
+        d_ff=64,
+        max_seq_len=32,
+        device="cpu",
+    )
+    assert not hasattr(loaded_full_ft.layers[0].attn.q_proj, "lora_A"), "Full FT model must NOT have LoRA adapter attached!"
+
+    # Nạp bình thường (LoRA mode): phải có lora_A
+    loaded_lora = load_model_for_inference(
+        base_model_path=None,
+        lora_checkpoint_path=None,
+        vocab_size=64,
+        d_model=32,
+        n_layers=1,
+        n_heads=2,
+        d_ff=64,
+        max_seq_len=32,
+        lora_r=4,
+        lora_alpha=8.0,
+        device="cpu",
+    )
+    assert hasattr(loaded_lora.layers[0].attn.q_proj, "lora_A"), "LoRA mode must attach LoRA adapter!"

@@ -6,6 +6,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import argparse
 import glob
+import json
 import math
 import random
 import sys
@@ -210,6 +211,11 @@ def parse_args() -> argparse.Namespace:
         help="Thư mục lưu SFT checkpoints trên Kaggle",
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn tới SFT checkpoint để train nối tiếp")
+    parser.add_argument(
+        "--full_ft",
+        action="store_true",
+        help="Kích hoạt chế độ Full Fine-Tuning (mở khóa toàn bộ 100%% tham số mô hình, không sử dụng LoRA)",
+    )
     parser.add_argument("--epochs", type=int, default=3, help="Số epoch huấn luyện SFT (mặc định 3 epochs)")
     parser.add_argument("--max_samples", type=int, default=20000, help="Số lượng mẫu tải từ yahma/alpaca-cleaned")
     parser.add_argument("--math_samples", type=int, default=10000, help="Số lượng mẫu toán học tự sinh (1-2 chữ số)")
@@ -307,12 +313,38 @@ def main() -> None:
         raw_samples = all_samples
         print(f"[Dataset] Tổng số mẫu SFT kết hợp: {len(raw_samples):,}")
 
-    dataset = SFTDataset(
-        samples=raw_samples,
+    # Tách tập Validation cố định (1,000 mẫu với seed=42)
+    random.seed(42)
+    shuffled_samples = list(raw_samples)
+    random.shuffle(shuffled_samples)
+
+    if args.smoke_test:
+        val_samples = shuffled_samples[:2]
+        train_samples = shuffled_samples
+        print(f"[Dataset Split] Smoke test: {len(train_samples)} mẫu train, {len(val_samples)} mẫu validation.")
+    elif len(shuffled_samples) > 1000:
+        val_samples = shuffled_samples[:1000]
+        train_samples = shuffled_samples[1000:]
+        print(f"[Dataset Split] Đã tách 1,000 mẫu validation (seed=42). Train: {len(train_samples):,} mẫu, Val: {len(val_samples):,} mẫu.")
+    else:
+        split_idx = max(1, len(shuffled_samples) // 5)
+        val_samples = shuffled_samples[:split_idx]
+        train_samples = shuffled_samples[split_idx:]
+        print(f"[Dataset Split] Train: {len(train_samples):,} mẫu, Val: {len(val_samples):,} mẫu.")
+
+    train_dataset = SFTDataset(
+        samples=train_samples,
         tokenizer=tokenizer,
         max_seq_len=args.max_seq_len,
     )
-    dataloader = DataLoader(dataset, batch_size=args.batch_size * max(1, num_gpus), shuffle=True, drop_last=True)
+    dataloader = DataLoader(train_dataset, batch_size=args.batch_size * max(1, num_gpus), shuffle=True, drop_last=True)
+
+    val_dataset = SFTDataset(
+        samples=val_samples,
+        tokenizer=tokenizer,
+        max_seq_len=args.max_seq_len,
+    )
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size * max(1, num_gpus), shuffle=False)
 
     # 4. Khởi tạo mô hình Transformer 100M
     base_model = Transformer(
@@ -337,12 +369,17 @@ def main() -> None:
     else:
         print("[Base Model] Khởi tạo trọng số ngẫu nhiên cho mô hình 100M.")
 
-    # 5. Gắn LoRA với rank r=32, alpha=64 cho mô hình 100M
-    apply_lora(base_model, r=args.lora_r, alpha=args.lora_alpha)
-
-    # Mở khóa lớp Embedding/LM Head trong giai đoạn SFT (Weight Tying tự động mở khóa cả lm_head.weight)
-    base_model.embedding.weight.requires_grad_(True)
-    print(f"[SFT Training] Đã mở khóa Embedding/LM Head: requires_grad={base_model.embedding.weight.requires_grad}")
+    # 5. Cấu hình chế độ: Full Fine-Tuning vs LoRA
+    if args.full_ft:
+        print("[SFT Training] CHẾ ĐỘ FULL FINE-TUNING ĐƯỢC BẬT: Mở khóa 100% tham số (requires_grad=True), KHÔNG dùng LoRA.")
+        for p in base_model.parameters():
+            p.requires_grad = True
+    else:
+        print(f"[SFT Training] CHẾ ĐỘ LORA ĐƯỢC BẬT: Gắn LoRA r={args.lora_r}, alpha={args.lora_alpha}.")
+        apply_lora(base_model, r=args.lora_r, alpha=args.lora_alpha)
+        # Mở khóa lớp Embedding/LM Head trong giai đoạn SFT (Weight Tying tự động mở khóa cả lm_head.weight)
+        base_model.embedding.weight.requires_grad_(True)
+        print(f"[SFT Training] Đã mở khóa Embedding/LM Head: requires_grad={base_model.embedding.weight.requires_grad}")
 
     # Multi-GPU DataParallel cho Kaggle T4 x2
     if device_type == "cuda" and num_gpus > 1:
@@ -353,24 +390,37 @@ def main() -> None:
 
     raw_model = model.module if isinstance(model, torch.nn.DataParallel) else model
 
-    # 6. Khởi tạo Optimizer: tách 2 nhóm tham số
-    # Nhóm 1: các tham số chứa "lora_" dùng lr=args.lr (weight_decay=0.01)
-    # Nhóm 2: [raw_model.embedding.weight] dùng lr=args.lr * 0.25 (weight_decay=0.0) để tránh xáo trộn biểu diễn từ vựng nền tảng
-    lora_params = [p for n, p in raw_model.named_parameters() if p.requires_grad and "lora_" in n]
-    embed_params = [raw_model.embedding.weight]
+    # 6. Khởi tạo Optimizer: tách 2 nhóm tham số cho LoRA hoặc 1 nhóm cho Full FT
+    if args.full_ft:
+        trainable_params = [p for p in raw_model.parameters() if p.requires_grad]
+        optimizer = torch.optim.AdamW(
+            trainable_params,
+            lr=args.lr,
+            betas=(0.9, 0.95),
+            weight_decay=0.01,
+        )
+        print(
+            f"[SFT Optimizer - Full FT] Mở khóa 100% tham số: {sum(p.numel() for p in trainable_params):,} tham số "
+            f"(lr={args.lr:.2e}, weight_decay=0.01, Cosine Annealing decay to {args.lr * 0.1:.2e})"
+        )
+    else:
+        # Nhóm 1: các tham số chứa "lora_" dùng lr=args.lr (weight_decay=0.01)
+        # Nhóm 2: [raw_model.embedding.weight] dùng lr=args.lr * 0.25 (weight_decay=0.0) để tránh xáo trộn biểu diễn từ vựng nền tảng
+        lora_params = [p for n, p in raw_model.named_parameters() if p.requires_grad and "lora_" in n]
+        embed_params = [raw_model.embedding.weight]
 
-    optim_groups = [
-        {"params": lora_params, "lr": args.lr, "weight_decay": 0.01},
-        {"params": embed_params, "lr": args.lr * 0.25, "weight_decay": 0.0},
-    ]
-    optimizer = torch.optim.AdamW(optim_groups, betas=(0.9, 0.95))
+        optim_groups = [
+            {"params": lora_params, "lr": args.lr, "weight_decay": 0.01},
+            {"params": embed_params, "lr": args.lr * 0.25, "weight_decay": 0.0},
+        ]
+        optimizer = torch.optim.AdamW(optim_groups, betas=(0.9, 0.95))
 
-    trainable_params = lora_params + embed_params
-    total_trainable = sum(p.numel() for p in trainable_params)
-    print(
-        f"[SFT Optimizer] Tổng tham số train: {total_trainable:,} "
-        f"(LoRA: {sum(p.numel() for p in lora_params):,}, Embedding: {raw_model.embedding.weight.numel():,})"
-    )
+        trainable_params = lora_params + embed_params
+        total_trainable = sum(p.numel() for p in trainable_params)
+        print(
+            f"[SFT Optimizer - LoRA] Tổng tham số train: {total_trainable:,} "
+            f"(LoRA: {sum(p.numel() for p in lora_params):,}, Embedding: {raw_model.embedding.weight.numel():,})"
+        )
 
     use_amp = (device_type == "cuda")
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -429,13 +479,22 @@ def main() -> None:
         print(f"[Auto-Resume SFT] Nạp thành công! Tiếp tục từ Epoch {start_epoch}, Step {global_step + 1}...")
 
     # 8. Vòng lặp huấn luyện SFT
+    mode_str = "FULL FINE-TUNING (100% PARAMS)" if args.full_ft else f"LORA (r={args.lora_r}, a={args.lora_alpha})"
     print("\n" + "=" * 65)
-    print(f"BẮT ĐẦU HUẤN LUYỆN SFT 100M (LORA r={args.lora_r}, a={args.lora_alpha})")
+    print(f"BẮT ĐẦU HUẤN LUYỆN SFT 100M - CHẾ ĐỘ: {mode_str}")
     print(f"TỔNG SỐ BATCH: {len(dataloader)} BATCHES/EPOCH | EPOCHS: {args.epochs}")
     print("=" * 65)
 
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+
+    training_start_time = time.time()
+    train_loss_history: List[float] = []
+    val_loss_history: List[float] = []
+
     model.train()
     total_steps_in_epoch = len(dataloader) // args.grad_accum
+    total_training_steps = max(1, total_steps_in_epoch * args.epochs)
 
     for epoch in range(start_epoch, args.epochs + 1):
         epoch_start_time = time.time()
@@ -471,25 +530,47 @@ def main() -> None:
                 global_step += 1
                 running_loss += accum_loss
 
+                # Cosine Annealing LR decay cho chế độ Full Fine-Tuning (decay về 10% LR ban đầu)
+                if args.full_ft:
+                    decay_ratio = min(1.0, global_step / total_training_steps)
+                    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+                    min_lr = args.lr * 0.1
+                    curr_lr = min_lr + coeff * (args.lr - min_lr)
+                    for pg in optimizer.param_groups:
+                        pg["lr"] = curr_lr
+
                 if global_step % 20 == 0 or args.smoke_test:
-                    print(
-                        f"Epoch {epoch:2d}/{args.epochs} | Step {global_step:5d} | "
-                        f"Loss: {accum_loss:.4f} | LR LoRA: {optimizer.param_groups[0]['lr']:.2e} | LR Embed: {optimizer.param_groups[1]['lr']:.2e}"
-                    )
+                    if args.full_ft:
+                        print(
+                            f"Epoch {epoch:2d}/{args.epochs} | Step {global_step:5d} | "
+                            f"Loss: {accum_loss:.4f} | LR: {optimizer.param_groups[0]['lr']:.2e}"
+                        )
+                    else:
+                        print(
+                            f"Epoch {epoch:2d}/{args.epochs} | Step {global_step:5d} | "
+                            f"Loss: {accum_loss:.4f} | LR LoRA: {optimizer.param_groups[0]['lr']:.2e} | LR Embed: {optimizer.param_groups[1]['lr']:.2e}"
+                        )
 
                 if global_step % args.save_every == 0 and not args.smoke_test:
                     ckpt_save_path = out_dir / f"sft_step_{global_step}.pt"
                     save_payload = {
                         "epoch": epoch,
                         "step": global_step,
-                        "lora_state_dict": get_lora_state_dict(raw_model),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
                         "loss": accum_loss,
+                        "mode": "full_ft" if args.full_ft else "lora",
                     }
-                    torch.save(save_payload, ckpt_save_path)
-                    torch.save(save_payload, out_dir / "latest_sft_checkpoint.pt")
-                    torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
+                    if args.full_ft:
+                        save_payload["model_state_dict"] = raw_model.state_dict()
+                        torch.save(save_payload, ckpt_save_path)
+                        torch.save(save_payload, out_dir / "latest_sft_checkpoint.pt")
+                        torch.save({"model_state_dict": raw_model.state_dict(), "mode": "full_ft"}, out_dir / "full_sft_model.pt")
+                    else:
+                        save_payload["lora_state_dict"] = get_lora_state_dict(raw_model)
+                        torch.save(save_payload, ckpt_save_path)
+                        torch.save(save_payload, out_dir / "latest_sft_checkpoint.pt")
+                        torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
                     print(f"[Checkpoint] Đã lưu SFT checkpoint tại step {global_step} vào {ckpt_save_path}")
 
                 accum_loss = 0.0
@@ -497,33 +578,99 @@ def main() -> None:
             if args.smoke_test and global_step >= 3:
                 break
 
+        # Đánh giá Val Loss cuối mỗi epoch (áp dụng cho cả LoRA và Full FT)
+        model.eval()
+        val_loss_accum = 0.0
+        val_steps = 0
+        with torch.no_grad():
+            for vx, vy in val_dataloader:
+                vx, vy = vx.to(device), vy.to(device)
+                with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
+                    v_logits = model(vx).float()
+                    v_loss = F.cross_entropy(
+                        v_logits.view(-1, raw_model.vocab_size),
+                        vy.view(-1),
+                        ignore_index=-100,
+                    )
+                val_loss_accum += v_loss.item()
+                val_steps += 1
+                if args.smoke_test and val_steps >= 2:
+                    break
+        val_loss = val_loss_accum / max(1, val_steps)
+        model.train()
+
         epoch_time = time.time() - epoch_start_time
         avg_loss = running_loss / max(1, total_steps_in_epoch)
-        print(f"\n--- Kết thúc Epoch {epoch}/{args.epochs} | Loss trung bình: {avg_loss:.4f} | Thời gian: {epoch_time:.2f}s ---")
+        train_loss_history.append(round(avg_loss, 4))
+        val_loss_history.append(round(val_loss, 4))
+
+        print(
+            f"\n--- Kết thúc Epoch {epoch}/{args.epochs} | "
+            f"Train Loss: {avg_loss:.4f} | Val Loss: {val_loss:.4f} | Thời gian: {epoch_time:.2f}s ---"
+        )
 
         epoch_ckpt_path = out_dir / f"sft_epoch_{epoch}.pt"
         save_epoch_payload = {
             "epoch": epoch,
             "step": global_step,
-            "lora_state_dict": get_lora_state_dict(raw_model),
             "optimizer_state_dict": optimizer.state_dict(),
             "scaler_state_dict": scaler.state_dict() if scaler.is_enabled() else None,
             "loss": avg_loss,
+            "val_loss": val_loss,
+            "mode": "full_ft" if args.full_ft else "lora",
         }
-        torch.save(save_epoch_payload, epoch_ckpt_path)
-        torch.save(save_epoch_payload, out_dir / "latest_sft_checkpoint.pt")
-        torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
-        print(f"[Checkpoint] Đã lưu SFT Adapter ra {out_dir / 'lora_sft_adapter.pt'}")
+        if args.full_ft:
+            save_epoch_payload["model_state_dict"] = raw_model.state_dict()
+            torch.save(save_epoch_payload, epoch_ckpt_path)
+            torch.save(save_epoch_payload, out_dir / "latest_sft_checkpoint.pt")
+            torch.save({"model_state_dict": raw_model.state_dict(), "mode": "full_ft"}, out_dir / "full_sft_model.pt")
+            print(f"[Checkpoint] Đã lưu Full SFT Model ra {out_dir / 'full_sft_model.pt'}")
+        else:
+            save_epoch_payload["lora_state_dict"] = get_lora_state_dict(raw_model)
+            torch.save(save_epoch_payload, epoch_ckpt_path)
+            torch.save(save_epoch_payload, out_dir / "latest_sft_checkpoint.pt")
+            torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
+            print(f"[Checkpoint] Đã lưu SFT Adapter ra {out_dir / 'lora_sft_adapter.pt'}")
 
         if args.smoke_test:
             break
 
-    # Lưu lại adapter cuối cùng
-    torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
+    # Lưu lại weights cuối cùng
+    if args.full_ft:
+        torch.save({"model_state_dict": raw_model.state_dict(), "mode": "full_ft"}, out_dir / "full_sft_model.pt")
+    else:
+        torch.save(get_lora_state_dict(raw_model), out_dir / "lora_sft_adapter.pt")
+
+    # Đo đạc và ghi nhận các chỉ số thực nghiệm ra file sft_metrics.json
+    elapsed_sec = round(time.time() - training_start_time, 2)
+    peak_vram_gb = 0.0
+    if torch.cuda.is_available():
+        peak_vram_gb = round(torch.cuda.max_memory_allocated() / (1024 ** 3), 3)
+
+    total_params = sum(p.numel() for p in raw_model.parameters())
+    trainable_params_count = sum(p.numel() for p in raw_model.parameters() if p.requires_grad)
+
+    metrics_payload = {
+        "mode": "full_ft" if args.full_ft else "lora",
+        "total_params": total_params,
+        "trainable_params": trainable_params_count,
+        "peak_vram_gb": peak_vram_gb,
+        "elapsed_sec": elapsed_sec,
+        "train_loss_history": train_loss_history,
+        "val_loss_history": val_loss_history,
+    }
+    metrics_path = out_dir / "sft_metrics.json"
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(metrics_payload, f, indent=2, ensure_ascii=False)
+
     print("\n" + "=" * 65)
     print("HOÀN THÀNH HUẤN LUYỆN SFT 100M!")
-    print(f"LoRA Adapter được lưu an toàn tại: {out_dir / 'lora_sft_adapter.pt'}")
+    if args.full_ft:
+        print(f"Full SFT Model được lưu tại: {out_dir / 'full_sft_model.pt'}")
+    else:
+        print(f"LoRA Adapter được lưu an toàn tại: {out_dir / 'lora_sft_adapter.pt'}")
     print(f"Checkpoint SFT mới nhất tại: {out_dir / 'latest_sft_checkpoint.pt'}")
+    print(f"Báo cáo số liệu thực nghiệm (Peak VRAM, Time, Loss) tại: {metrics_path}")
     print("=" * 65)
 
 
