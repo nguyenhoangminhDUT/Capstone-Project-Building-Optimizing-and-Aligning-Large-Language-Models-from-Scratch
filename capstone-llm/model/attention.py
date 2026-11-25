@@ -70,7 +70,10 @@ class CausalSelfAttention(nn.Module):
             # được phép attend đến toàn bộ quá khứ trong cache (các vị trí 0..offset). Do đó không cần mask.
             # Khi T > 1 (prefill cùng cache), chỉ áp dụng mask cho phần tương lai cục bộ.
             if T > 1:
-                mask = self.causal_mask[:T, :T]
+                if T > self.causal_mask.shape[0]:
+                    mask = torch.tril(torch.ones(T, T, dtype=torch.bool, device=x.device))
+                else:
+                    mask = self.causal_mask[:T, :T]
                 if offset > 0:
                     past_mask = torch.ones(T, offset, dtype=torch.bool, device=x.device)
                     full_mask = torch.cat((past_mask, mask), dim=-1)
@@ -85,9 +88,12 @@ class CausalSelfAttention(nn.Module):
 
             scores = torch.matmul(q, k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
 
-            # CRITICAL: 1. Cắt causal_mask theo độ dài T thực tế
+            # CRITICAL: 1. Cắt causal_mask theo độ dài T thực tế (mở rộng động nếu T > max_len)
             # CRITICAL: 2. Dùng float("-inf") thay vì -1e9 để tránh tràn số fp16/bf16
-            mask = self.causal_mask[:T, :T]
+            if T > self.causal_mask.shape[0]:
+                mask = torch.tril(torch.ones(T, T, dtype=torch.bool, device=x.device))
+            else:
+                mask = self.causal_mask[:T, :T]
             scores = scores.masked_fill(~mask, float("-inf"))
 
         attn_weights = F.softmax(scores, dim=-1)

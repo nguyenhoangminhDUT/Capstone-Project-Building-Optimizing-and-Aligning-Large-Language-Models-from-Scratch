@@ -338,7 +338,8 @@ def chat(
     """
     Hàm trò chuyện tương tác với LLM 100M:
     1. Kiểm duyệt đầu vào qua check_input (nếu enable_guardrails=True).
-    2. Format prompt: '### Instruction:\\n{user_prompt}\\n\\n### Response:\\n'.
+    2. Format prompt theo chuẩn Alpaca SFTDataset:
+       'Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{user_prompt}\n\n### Response:\n'.
     3. Sinh token với KV Cache, repetition_penalty=1.2, top_p=0.9, tự động dừng khi gặp <|eos|>.
     4. Kiểm duyệt đầu ra qua check_output (PII / Toxic) (nếu enable_guardrails=True).
     5. Trả về kết quả hoàn chỉnh, mượt mà, không lặp từ.
@@ -347,8 +348,12 @@ def chat(
     if enable_guardrails and not check_input(user_prompt):
         return "Xin lỗi, yêu cầu của bạn đã bị từ chối do vi phạm chính sách an toàn (phát hiện prompt injection hoặc nội dung độc hại)."
 
-    # 2. Format prompt theo chuẩn template
-    formatted_prompt = f"### Instruction:\n{user_prompt.strip()}\n\n### Response:\n"
+    # 2. Format prompt theo chuẩn template SFTDataset (đồng bộ 100% với train_sft.py)
+    formatted_prompt = (
+        "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n"
+        f"### Instruction:\n{user_prompt.strip()}\n\n"
+        "### Response:\n"
+    )
 
     prompt_ids = tokenizer.encode(formatted_prompt).ids if hasattr(tokenizer, "encode") else [0]
     if not prompt_ids:

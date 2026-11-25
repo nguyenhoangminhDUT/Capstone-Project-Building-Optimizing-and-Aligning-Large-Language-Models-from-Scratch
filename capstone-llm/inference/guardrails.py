@@ -15,177 +15,30 @@ try:
 except ImportError:
     pass
 
-# ==============================================================================
-# 1. CÁC MẪU REGEX NHẬN DIỆN PROMPT INJECTION & JAILBREAK
-# ==============================================================================
-PROMPT_INJECTION_PATTERNS = [
-    r"ignore\s+(all\s+)?(previous|prior)\s+instructions",
-    r"disregard\s+(all\s+)?(previous|prior)?\s*guidelines",
-    r"you\s+are\s+now\s+in\s+dan\s+mode",
-    r"system\s*override",
-    r"system\s*prompt",
-    r"bypass(\s+all)?\s+(safety|filters|guardrails|rules)",
-    r"jailbreak",
-    r"developer\s*mode",
-    r"reveal\s+(your\s+)?(system\s+prompt|secret\s+key|internal\s+instructions)",
-    r"new\s+instructions\s+follow",
-]
-
-PROMPT_INJECTION_REGEX = re.compile(
-    "|".join(f"(?:{p})" for p in PROMPT_INJECTION_PATTERNS),
-    re.IGNORECASE,
-)
-
-# ==============================================================================
-# 2. DANH SÁCH 20+ TỪ KHÓA ĐỘC HẠI (BẠO LỰC, MA TÚY, VŨ KHÍ, TỘI PHẠM)
-# ==============================================================================
-TOXIC_KEYWORDS = [
-    # Bạo lực & Vũ khí
-    "bomb",
-    "explosive",
-    "weapon",
-    "assassinate",
-    "murder",
-    "massacre",
-    "terrorist",
-    "suicide",
-    "self-harm",
-    # Ma túy & Độc chất
-    "heroin",
-    "cocaine",
-    "methamphetamine",
-    "fentanyl",
-    "synthesize drugs",
-    "poison",
-    # Tội phạm mạng & Nguy hại
-    "malware",
-    "ransomware",
-    "credit card theft",
-    "child abuse",
-    "human trafficking",
-    "money laundering",
-]
-
-TOXIC_KEYWORDS_REGEX = re.compile(
-    "|".join(rf"\b{re.escape(kw)}\b" for kw in TOXIC_KEYWORDS),
-    re.IGNORECASE,
-)
-
-# ==============================================================================
-# 3. REGEX KIỂM TRA THÔNG TIN ĐỊNH DANH CÁ NHÂN (PII) VÀ NGÔN TỪ THÙ ĐỊCH
-# ==============================================================================
-# Nhận diện số điện thoại quốc tế hoặc nội địa (Việt Nam / Mỹ / phổ quát)
-PHONE_REGEX = re.compile(
-    r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b0\d{9,10}\b"
-)
-
-# Nhận diện địa chỉ email chuẩn RFC 5322 cơ bản
-EMAIL_REGEX = re.compile(
-    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
-)
-
-# Ngôn từ thù địch, quấy rối và chỉ dẫn nguy hiểm ở output
-HATE_SPEECH_PATTERNS = [
-    r"kill\s+yourself",
-    r"hate\s+speech",
-    r"exterminate",
-    r"subhuman",
-    r"nigger",
-    r"faggot",
-    r"chink",
-    r"gook",
-    r"retard",
-    r"death\s+to\s+all",
-    r"how\s+to\s+make\s+a\s+bomb",
-    r"manufacture\s+explosives",
-    r"synthesize\s+illegal\s+narcotics",
-    r"steal\s+credit\s+card",
-    r"write\s+malware",
-    r"hack\s+into\s+government",
-]
-
-HATE_SPEECH_REGEX = re.compile(
-    "|".join(rf"\b{p}\b" for p in HATE_SPEECH_PATTERNS),
-    re.IGNORECASE,
+from safety.guardrails import (
+    EMAIL_REGEX,
+    HARMFUL_REQUEST_REGEX,
+    OUTPUT_UNSAFE_REGEX,
+    PHONE_REGEX,
+    PROMPT_INJECTION_PATTERNS,
+    PROMPT_INJECTION_REGEX,
+    SafetyGuardrails,
+    SYSTEM_LEAKAGE_REGEX,
+    check_input as _check_input_detailed,
+    check_output as _check_output_detailed,
 )
 
 
 def check_input(text: str) -> bool:
-    """
-    Kiểm tra đầu vào (Prompt) của người dùng:
-    - Trả về False nếu chứa các dấu hiệu Prompt Injection ("ignore previous instructions",
-      "system prompt", "bypass", v.v.) hoặc từ khóa độc hại (bạo lực, ma túy, vũ khí).
-    - Trả về True nếu văn bản an toàn.
-    """
-    clean_text = text.strip()
-    if not clean_text:
-        return False
-
-    # 1. Kiểm tra dấu hiệu Prompt Injection / Jailbreak
-    if PROMPT_INJECTION_REGEX.search(clean_text):
-        return False
-
-    # 2. Kiểm tra từ khóa độc hại (bạo lực, ma túy, vũ khí, tội phạm)
-    if TOXIC_KEYWORDS_REGEX.search(clean_text):
-        return False
-
-    return True
+    """Backward-compatible boolean wrapper for input guardrail."""
+    is_safe, _, _ = _check_input_detailed(text)
+    return is_safe
 
 
 def check_output(text: str) -> bool:
-    """
-    Kiểm tra đầu ra sinh bởi mô hình LLM:
-    - Trả về False nếu chứa thông tin PII (số điện thoại, email) hoặc từ ngữ thù địch/độc hại.
-    - Trả về True nếu văn bản an toàn.
-    """
-    clean_text = text.strip()
-    if not clean_text:
-        return True
-
-    # 1. Kiểm tra PII: Số điện thoại
-    if PHONE_REGEX.search(clean_text):
-        return False
-
-    # 2. Kiểm tra PII: Địa chỉ email
-    if EMAIL_REGEX.search(clean_text):
-        return False
-
-    # 3. Kiểm tra ngôn từ thù địch và nội dung nguy hiểm
-    if HATE_SPEECH_REGEX.search(clean_text):
-        return False
-
-    return True
-
-
-class SafetyGuardrails:
-    """Lớp điều phối an toàn toàn diện cho quá trình suy luận (Inference Pipeline)."""
-
-    def __init__(self, max_repetition_threshold: int = 5) -> None:
-        self.max_repetition_threshold = max_repetition_threshold
-
-    def check_input(self, prompt: str) -> Tuple[bool, Optional[str]]:
-        """Kiểm tra input prompt, trả về (is_safe, refusal_reason)."""
-        is_safe = check_input(prompt)
-        if not is_safe:
-            return False, "Yêu cầu bị từ chối do vi phạm chính sách an toàn (phát hiện prompt injection hoặc nội dung độc hại)."
-        return True, None
-
-    def check_output(self, response_text: str) -> Tuple[bool, str]:
-        """Kiểm tra output, lọc PII/ngôn từ thù địch và xử lý vòng lặp từ vô hạn."""
-        is_safe = check_output(response_text)
-        if not is_safe:
-            return False, "Nội dung phản hồi bị chặn do chứa PII (thông tin cá nhân) hoặc nội dung không an toàn."
-
-        # Kiểm tra suy biến lặp từ vô hạn (degenerate repetition loop)
-        words = response_text.split()
-        if len(words) >= self.max_repetition_threshold:
-            for i in range(len(words) - self.max_repetition_threshold + 1):
-                window = words[i : i + self.max_repetition_threshold]
-                if len(set(window)) == 1:
-                    sanitized = " ".join(words[: i + 1]) + " [Phát hiện lặp từ, đã tự động ngắt kết quả]"
-                    return True, sanitized
-
-        return True, response_text
+    """Backward-compatible boolean wrapper for output guardrail."""
+    is_safe, _, _ = _check_output_detailed(text)
+    return is_safe
 
 
 def guarded_generate(

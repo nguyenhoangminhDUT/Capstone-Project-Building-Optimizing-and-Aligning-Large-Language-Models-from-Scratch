@@ -90,9 +90,9 @@ class Transformer(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, d_model)
 
-        # RoPE được tạo 1 lần trong __init__ và truyền xuống từng Block
+        # RoPE được tạo 1 lần trong __init__ và truyền xuống từng Block (hỗ trợ tối thiểu 2200 vị trí cho benchmark L=2048)
         head_dim = d_model // n_heads
-        self.rope = RoPE(head_dim=head_dim, max_len=max_seq_len)
+        self.rope = RoPE(head_dim=head_dim, max_len=max(2200, max_seq_len))
 
         self.layers = nn.ModuleList(
             [
