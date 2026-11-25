@@ -204,6 +204,98 @@ def run_generate_only(args: argparse.Namespace, out_dir: Path) -> Path:
     return gen_path
 
 
+_GEMINI_MODEL_CACHE: Optional[str] = None
+_GEMINI_FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+]
+
+
+def _extract_json_payload(text: str) -> Dict[str, object]:
+    """Trích xuất JSON object từ chuỗi phản hồi của LLM (hỗ trợ cả markdown code fence)."""
+    cleaned = text.strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        raise
+
+
+def probe_gemini_model(api_key: str) -> str:
+    """Tự động dò (probe) model Gemini >= 2.5 khả dụng nhất cho API key hiện tại và cache kết quả."""
+    global _GEMINI_MODEL_CACHE
+    if _GEMINI_MODEL_CACHE is not None:
+        return _GEMINI_MODEL_CACHE
+
+    discovered: List[str] = []
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    try:
+        req = urllib.request.Request(list_url, method="GET")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for m in data.get("models", []):
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" not in methods:
+                    continue
+                raw_name = str(m.get("name", ""))
+                model_id = raw_name.split("/")[-1]
+                if re.search(r"gemini-(2\.[5-9]|[3-9]\.\d+)", model_id):
+                    discovered.append(model_id)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        print(f"[Gemini Judge] Cảnh báo khi liệt kê models (HTTP {e.code}): {err_body}")
+    except Exception as e:
+        print(f"[Gemini Judge] Cảnh báo khi liệt kê models: {e}")
+
+    # Ưu tiên danh sách chuẩn trước, sau đó đến các model >= 2.5 mới phát hiện (loại trùng lặp)
+    candidates: List[str] = []
+    seen = set()
+
+    # Nếu discovered có các model nằm trong fallback list, ưu tiên theo thứ tự fallback list trước
+    for m_id in _GEMINI_FALLBACK_MODELS:
+        if m_id not in seen:
+            candidates.append(m_id)
+            seen.add(m_id)
+    for m_id in sorted(discovered, reverse=True):
+        if m_id not in seen:
+            candidates.append(m_id)
+            seen.add(m_id)
+
+    last_error = ""
+    probe_body = json.dumps({
+        "contents": [{"parts": [{"text": "Reply with OK."}]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8},
+    }).encode("utf-8")
+
+    for model_id in candidates:
+        probe_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
+        req = urllib.request.Request(
+            probe_url,
+            data=probe_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                if resp.status == 200:
+                    _GEMINI_MODEL_CACHE = model_id
+                    print(f"[Gemini Judge] Selected active model: {model_id}")
+                    return model_id
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            last_error = f"{model_id} -> HTTP {e.code}: {err_body}"
+        except Exception as e:
+            last_error = f"{model_id} -> {e}"
+
+    raise RuntimeError(f"Không tìm thấy model Gemini >= 2.5 khả dụng cho API key. Lỗi gần nhất: {last_error}")
+
+
 def call_llm_judge_api(system_prompt: str, user_prompt: str, provider: str = "auto") -> Dict[str, object]:
     """Gọi LLM Judge qua API (OpenAI / Anthropic / Gemini) hoặc Mock khi không có API key trong smoke_test."""
     if provider == "auto":
@@ -271,20 +363,43 @@ def call_llm_judge_api(system_prompt: str, user_prompt: str, provider: str = "au
 
     if provider == "gemini":
         api_key = os.environ["GEMINI_API_KEY"]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        model_id = probe_gemini_model(api_key)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
         body = json.dumps({
             "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
             "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"},
         }).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=body,
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text)
+
+        max_retries = 5
+        for attempt in range(max_retries):
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    result = _extract_json_payload(text)
+                    time.sleep(0.5)
+                    return result
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode("utf-8", errors="replace")
+                if e.code == 429 and attempt < max_retries - 1:
+                    backoff = 2.0 ** (attempt + 1)
+                    print(f"[Gemini Judge] HTTP 429 Rate Limit. Thử lại sau {backoff:.1f}s (lần {attempt + 1}/{max_retries})...")
+                    time.sleep(backoff)
+                    continue
+                raise RuntimeError(f"Gemini API HTTP {e.code} ({model_id}): {err_body}") from e
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    backoff = 2.0 ** attempt
+                    print(f"[Gemini Judge] Lỗi tạm thời ({e}). Thử lại sau {backoff:.1f}s...")
+                    time.sleep(backoff)
+                    continue
+                raise RuntimeError(f"Gemini API failed ({model_id}): {e}") from e
 
     raise ValueError(f"Unsupported judge provider: {provider}")
 
