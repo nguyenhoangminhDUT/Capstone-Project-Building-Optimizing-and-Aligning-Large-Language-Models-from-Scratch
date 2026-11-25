@@ -1,0 +1,739 @@
+[{"stream_name":"stderr","time":8.216037595,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":8.216115918,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":8.216123649,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":8.216128202,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":8.837873709,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":8.837914551,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":8.837919958,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":8.837925633,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":16.930621736,"data":"Cloning into 'Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch'...\n"}
+,{"stream_name":"stdout","time":16.999369144,"data":"🔑 Đã nạp secret: GEMINI_API_KEY\n"}
+,{"stream_name":"stderr","time":17.133260966,"data":"Cloning into 'Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch'...\n"}
+,{"stream_name":"stderr","time":17.133308787,"data":"\n"}
+,{"stream_name":"stderr","time":17.133315963,"data":"Cloning into 'Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch'...\n"}
+,{"stream_name":"stdout","time":17.621842206,"data":"9a49207 feat(eval): fix math prompt alignment, add KV Cache profiler, two-tier Guardrails eval, and LLM-as-a-Judge\n"}
+,{"stream_name":"stdout","time":17.823900428,"data":"9a49207 feat(eval): fix math prompt alignment, add KV Cache profiler, two-tier Guardrails eval, and LLM-as-a-Judge\n"}
+,{"stream_name":"stdout","time":22.427411741,"data":"✅ base      : /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt (1314.5 MB)\n"}
+,{"stream_name":"stdout","time":22.427461499,"data":"✅ full_ft   : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_full/full_sft_model.pt (438.2 MB)\n"}
+,{"stream_name":"stdout","time":22.427467095,"data":"✅ sft_lora  : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_lora/lora_sft_adapter.pt (103.0 MB)\n"}
+,{"stream_name":"stdout","time":22.427471092,"data":"✅ dpo_200   : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/dpo_clean/lora_dpo_step_200.pt (103.0 MB)\n"}
+,{"stream_name":"stdout","time":22.427474872,"data":"✅ tokenizer : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/tokenizer/tokenizer.json (2.2 MB)\n"}
+,{"stream_name":"stdout","time":22.42747993,"data":"\n"}
+,{"stream_name":"stdout","time":22.427492906,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":22.427498273,"data":"[1/4] ĐÁNH GIÁ ĐỊNH LƯỢNG (PPL, MATH PASS@1 ĐÃ FIX TEMPLATE, SAFETY + SAMPLES)\n"}
+,{"stream_name":"stdout","time":22.427502946,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":27.356477116,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":27.356529586,"data":"CHƯƠNG TRÌNH ĐÁNH GIÁ ĐỊNH LƯỢNG MÔ HÌNH CAPSTONE LLM (100M)\n"}
+,{"stream_name":"stdout","time":27.356553533,"data":"Device: cuda\n"}
+,{"stream_name":"stdout","time":27.356557885,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":27.361085738,"data":"[Checkpoints]\n"}
+,{"stream_name":"stdout","time":27.361107221,"data":"  - Base   : /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt\n"}
+,{"stream_name":"stdout","time":27.361111512,"data":"  - Full FT: /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_full/full_sft_model.pt\n"}
+,{"stream_name":"stdout","time":27.361115208,"data":"  - SFT    : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_lora/lora_sft_adapter.pt\n"}
+,{"stream_name":"stdout","time":27.361118781,"data":"  - DPO    : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/dpo_clean/lora_dpo_step_200.pt\n"}
+,{"stream_name":"stdout","time":27.361122995,"data":"  - Tokenizer: /kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/tokenizer/tokenizer.json\n"}
+,{"stream_name":"stdout","time":27.361127586,"data":"\n"}
+,{"stream_name":"stdout","time":27.361131203,"data":"[Dataset] Đang tải 50 văn bản validation từ 'roneneldan/TinyStories'...\n"}
+,{"stream_name":"stderr","time":27.528892543,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":27.558908795,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":27.558947738,"data":"CHƯƠNG TRÌNH ĐÁNH GIÁ ĐỊNH LƯỢNG MÔ HÌNH CAPSTONE LLM (100M)\n"}
+,{"stream_name":"stdout","time":27.558952378,"data":"Device: cuda\n"}
+,{"stream_name":"stdout","time":27.558954735,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":27.558957137,"data":"[Checkpoints]\n"}
+,{"stream_name":"stdout","time":27.558959317,"data":"  - Base   : /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt\n"}
+,{"stream_name":"stdout","time":27.558961651,"data":"  - Full FT: /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_full/full_sft_model.pt\n"}
+,{"stream_name":"stdout","time":27.558964188,"data":"  - SFT    : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_lora/lora_sft_adapter.pt\n"}
+,{"stream_name":"stdout","time":27.55896651,"data":"  - DPO    : /kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/dpo_clean/lora_dpo_step_200.pt\n"}
+,{"stream_name":"stdout","time":27.558968977,"data":"  - Tokenizer: /kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/tokenizer/tokenizer.json\n"}
+,{"stream_name":"stdout","time":27.558971474,"data":"\n"}
+,{"stream_name":"stdout","time":27.558973818,"data":"[Dataset] Đang tải 50 văn bản validation từ 'roneneldan/TinyStories'...\n"}
+,{"stream_name":"stderr","time":27.731490784000002,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":27.731522938,"data":"\n"}
+,{"stream_name":"stderr","time":27.731528395,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":38.488941665,"data":"\rGenerating train split:   0%|          | 0/2119719 [00:00\u003c?, ? examples/s]\rGenerating train split:   0%|          | 1000/2119719 [00:00\u003c04:15, 8304.83 examples/s]\rGenerating train split:   0%|          | 0/2119719 [00:00\u003c?, ? examples/s]\rGenerating train split:   0%|          | 1000/2119719 [00:00\u003c04:15, 8304.83 examples/s]\n"}
+,{"stream_name":"stderr","time":38.712184722,"data":"\rGenerating train split:   0%|          | 0/2119719 [00:00\u003c?, ? examples/s]\rGenerating train split:   0%|          | 1000/2119719 [00:00\u003c04:15, 8304.83 examples/s]\rGenerating train split:   2%|▏         | 38000/2119719 [00:00\u003c00:10, 201927.65 examples/s]\rGenerating train split:   3%|▎         | 72000/2119719 [00:00\u003c00:08, 250280.11 examples/s]\rGenerating train split:   2%|▏         | 38000/2119719 [00:00\u003c00:10, 201927.65 examples/s]\rGenerating train split:   3%|▎         | 72000/2119719 [00:00\u003c00:08, 250280.11 examples/s]\n"}
+,{"stream_name":"stderr","time":38.923454059,"data":"\rGenerating train split:   2%|▏         | 38000/2119719 [00:00\u003c00:10, 201927.65 examples/s]\rGenerating train split:   3%|▎         | 72000/2119719 [00:00\u003c00:08, 250280.11 examples/s]\rGenerating train split:   5%|▌         | 110000/2119719 [00:00\u003c00:06, 297232.75 examples/s]\rGenerating train split:   7%|▋         | 144000/2119719 [00:00\u003c00:06, 294480.24 examples/s]\rGenerating train split:   5%|▌         | 110000/2119719 [00:00\u003c00:06, 297232.75 examples/s]\rGenerating train split:   7%|▋         | 144000/2119719 [00:00\u003c00:06, 294480.24 examples/s]\n"}
+,{"stream_name":"stderr","time":39.142386899,"data":"\rGenerating train split:   5%|▌         | 110000/2119719 [00:00\u003c00:06, 297232.75 examples/s]\rGenerating train split:   7%|▋         | 144000/2119719 [00:00\u003c00:06, 294480.24 examples/s]\rGenerating train split:   8%|▊         | 180000/2119719 [00:00\u003c00:06, 313579.39 examples/s]\rGenerating train split:  10%|█         | 214000/2119719 [00:00\u003c00:06, 308981.69 examples/s]\rGenerating train split:   8%|▊         | 180000/2119719 [00:00\u003c00:06, 313579.39 examples/s]\rGenerating train split:  10%|█         | 214000/2119719 [00:00\u003c00:06, 308981.69 examples/s]\n"}
+,{"stream_name":"stderr","time":39.361192214,"data":"\rGenerating train split:   8%|▊         | 180000/2119719 [00:00\u003c00:06, 313579.39 examples/s]\rGenerating train split:  10%|█         | 214000/2119719 [00:00\u003c00:06, 308981.69 examples/s]\rGenerating train split:  12%|█▏        | 252000/2119719 [00:00\u003c00:05, 325488.73 examples/s]\rGenerating train split:  13%|█▎        | 285000/2119719 [00:00\u003c00:05, 318433.39 examples/s]\rGenerating train split:  12%|█▏        | 252000/2119719 [00:00\u003c00:05, 325488.73 examples/s]\rGenerating train split:  13%|█▎        | 285000/2119719 [00:00\u003c00:05, 318433.39 examples/s]\n"}
+,{"stream_name":"stderr","time":39.571557312,"data":"\rGenerating train split:  12%|█▏        | 252000/2119719 [00:00\u003c00:05, 325488.73 examples/s]\rGenerating train split:  13%|█▎        | 285000/2119719 [00:00\u003c00:05, 318433.39 examples/s]\rGenerating train split:  15%|█▌        | 322000/2119719 [00:01\u003c00:05, 331502.03 examples/s]\rGenerating train split:  17%|█▋        | 357000/2119719 [00:01\u003c00:05, 314284.23 examples/s]\rGenerating train split:  15%|█▌        | 322000/2119719 [00:01\u003c00:05, 331502.03 examples/s]\rGenerating train split:  17%|█▋        | 357000/2119719 [00:01\u003c00:05, 314284.23 examples/s]\n"}
+,{"stream_name":"stderr","time":39.800759183,"data":"\rGenerating train split:  15%|█▌        | 322000/2119719 [00:01\u003c00:05, 331502.03 examples/s]\rGenerating train split:  17%|█▋        | 357000/2119719 [00:01\u003c00:05, 314284.23 examples/s]\rGenerating train split:  19%|█▊        | 395000/2119719 [00:01\u003c00:05, 328791.25 examples/s]\rGenerating train split:  20%|██        | 429000/2119719 [00:01\u003c00:05, 321878.93 examples/s]\rGenerating train split:  19%|█▊        | 395000/2119719 [00:01\u003c00:05, 328791.25 examples/s]\rGenerating train split:  20%|██        | 429000/2119719 [00:01\u003c00:05, 321878.93 examples/s]\n"}
+,{"stream_name":"stderr","time":40.017202718,"data":"\rGenerating train split:  19%|█▊        | 395000/2119719 [00:01\u003c00:05, 328791.25 examples/s]\rGenerating train split:  20%|██        | 429000/2119719 [00:01\u003c00:05, 321878.93 examples/s]\rGenerating train split:  22%|██▏       | 467000/2119719 [00:01\u003c00:04, 334772.46 examples/s]\rGenerating train split:  24%|██▎       | 501000/2119719 [00:01\u003c00:04, 333870.06 examples/s]\rGenerating train split:  22%|██▏       | 467000/2119719 [00:01\u003c00:04, 334772.46 examples/s]\rGenerating train split:  24%|██▎       | 501000/2119719 [00:01\u003c00:04, 333870.06 examples/s]\n"}
+,{"stream_name":"stderr","time":40.287968592,"data":"\rGenerating train split:  22%|██▏       | 467000/2119719 [00:01\u003c00:04, 334772.46 examples/s]\rGenerating train split:  24%|██▎       | 501000/2119719 [00:01\u003c00:04, 333870.06 examples/s]\rGenerating train split:  26%|██▌       | 549930/2119719 [00:01\u003c00:04, 315210.25 examples/s]\rGenerating train split:  28%|██▊       | 587930/2119719 [00:01\u003c00:04, 329255.79 examples/s]\rGenerating train split:  26%|██▌       | 549930/2119719 [00:01\u003c00:04, 315210.25 examples/s]\rGenerating train split:  28%|██▊       | 587930/2119719 [00:01\u003c00:04, 329255.79 examples/s]\n"}
+,{"stream_name":"stderr","time":40.546057804,"data":"\rGenerating train split:  26%|██▌       | 549930/2119719 [00:01\u003c00:04, 315210.25 examples/s]\rGenerating train split:  28%|██▊       | 587930/2119719 [00:01\u003c00:04, 329255.79 examples/s]\rGenerating train split:  30%|███       | 639930/2119719 [00:02\u003c00:04, 331348.42 examples/s]\rGenerating train split:  33%|███▎      | 689930/2119719 [00:02\u003c00:04, 325095.06 examples/s]\rGenerating train split:  30%|███       | 639930/2119719 [00:02\u003c00:04, 331348.42 examples/s]\rGenerating train split:  33%|███▎      | 689930/2119719 [00:02\u003c00:04, 325095.06 examples/s]\n"}
+,{"stream_name":"stderr","time":40.810146089,"data":"\rGenerating train split:  30%|███       | 639930/2119719 [00:02\u003c00:04, 331348.42 examples/s]\rGenerating train split:  33%|███▎      | 689930/2119719 [00:02\u003c00:04, 325095.06 examples/s]\rGenerating train split:  34%|███▍      | 726930/2119719 [00:02\u003c00:04, 332415.48 examples/s]\rGenerating train split:  37%|███▋      | 779930/2119719 [00:02\u003c00:04, 328976.37 examples/s]\rGenerating train split:  34%|███▍      | 726930/2119719 [00:02\u003c00:04, 332415.48 examples/s]\rGenerating train split:  37%|███▋      | 779930/2119719 [00:02\u003c00:04, 328976.37 examples/s]\n"}
+,{"stream_name":"stderr","time":41.088637531,"data":"\rGenerating train split:  34%|███▍      | 726930/2119719 [00:02\u003c00:04, 332415.48 examples/s]\rGenerating train split:  37%|███▋      | 779930/2119719 [00:02\u003c00:04, 328976.37 examples/s]\rGenerating train split:  38%|███▊      | 813930/2119719 [00:02\u003c00:04, 322646.03 examples/s]\rGenerating train split:  40%|████      | 853930/2119719 [00:02\u003c00:03, 338611.26 examples/s]\rGenerating train split:  38%|███▊      | 813930/2119719 [00:02\u003c00:04, 322646.03 examples/s]\rGenerating train split:  40%|████      | 853930/2119719 [00:02\u003c00:03, 338611.26 examples/s]\n"}
+,{"stream_name":"stderr","time":41.346478234,"data":"\rGenerating train split:  38%|███▊      | 813930/2119719 [00:02\u003c00:04, 322646.03 examples/s]\rGenerating train split:  40%|████      | 853930/2119719 [00:02\u003c00:03, 338611.26 examples/s]\rGenerating train split:  42%|████▏     | 893930/2119719 [00:02\u003c00:03, 308720.81 examples/s]\rGenerating train split:  44%|████▍     | 931930/2119719 [00:02\u003c00:03, 324243.42 examples/s]\rGenerating train split:  42%|████▏     | 893930/2119719 [00:02\u003c00:03, 308720.81 examples/s]\rGenerating train split:  44%|████▍     | 931930/2119719 [00:02\u003c00:03, 324243.42 examples/s]\n"}
+,{"stream_name":"stderr","time":41.602761402,"data":"\rGenerating train split:  42%|████▏     | 893930/2119719 [00:02\u003c00:03, 308720.81 examples/s]\rGenerating train split:  44%|████▍     | 931930/2119719 [00:02\u003c00:03, 324243.42 examples/s]\rGenerating train split:  46%|████▋     | 982930/2119719 [00:03\u003c00:03, 326876.58 examples/s]\rGenerating train split:  48%|████▊     | 1021930/2119719 [00:03\u003c00:03, 337924.86 examples/s]\rGenerating train split:  46%|████▋     | 982930/2119719 [00:03\u003c00:03, 326876.58 examples/s]\rGenerating train split:  48%|████▊     | 1021930/2119719 [00:03\u003c00:03, 337924.86 examples/s]\n"}
+,{"stream_name":"stderr","time":41.811954646,"data":"\rGenerating train split:  46%|████▋     | 982930/2119719 [00:03\u003c00:03, 326876.58 examples/s]\rGenerating train split:  48%|████▊     | 1021930/2119719 [00:03\u003c00:03, 337924.86 examples/s]\rGenerating train split:  50%|████▉     | 1056930/2119719 [00:03\u003c00:03, 337552.05 examples/s]\rGenerating train split:  52%|█████▏    | 1104860/2119719 [00:03\u003c00:03, 329903.27 examples/s]\rGenerating train split:  50%|████▉     | 1056930/2119719 [00:03\u003c00:03, 337552.05 examples/s]\rGenerating train split:  52%|█████▏    | 1104860/2119719 [00:03\u003c00:03, 329903.27 examples/s]\n"}
+,{"stream_name":"stderr","time":42.066147333,"data":"\rGenerating train split:  50%|████▉     | 1056930/2119719 [00:03\u003c00:03, 337552.05 examples/s]\rGenerating train split:  52%|█████▏    | 1104860/2119719 [00:03\u003c00:03, 329903.27 examples/s]\rGenerating train split:  54%|█████▍    | 1140860/2119719 [00:03\u003c00:02, 335449.76 examples/s]\rGenerating train split:  56%|█████▌    | 1177860/2119719 [00:03\u003c00:02, 340660.57 examples/s]\rGenerating train split:  54%|█████▍    | 1140860/2119719 [00:03\u003c00:02, 335449.76 examples/s]\rGenerating train split:  56%|█████▌    | 1177860/2119719 [00:03\u003c00:02, 340660.57 examples/s]\n"}
+,{"stream_name":"stderr","time":42.3258329,"data":"\rGenerating train split:  54%|█████▍    | 1140860/2119719 [00:03\u003c00:02, 335449.76 examples/s]\rGenerating train split:  56%|█████▌    | 1177860/2119719 [00:03\u003c00:02, 340660.57 examples/s]\rGenerating train split:  58%|█████▊    | 1226860/2119719 [00:03\u003c00:02, 331461.22 examples/s]\rGenerating train split:  60%|█████▉    | 1264860/2119719 [00:03\u003c00:02, 341113.61 examples/s]\rGenerating train split:  58%|█████▊    | 1226860/2119719 [00:03\u003c00:02, 331461.22 examples/s]\rGenerating train split:  60%|█████▉    | 1264860/2119719 [00:03\u003c00:02, 341113.61 examples/s]\n"}
+,{"stream_name":"stderr","time":42.581390953,"data":"\rGenerating train split:  58%|█████▊    | 1226860/2119719 [00:03\u003c00:02, 331461.22 examples/s]\rGenerating train split:  60%|█████▉    | 1264860/2119719 [00:03\u003c00:02, 341113.61 examples/s]\rGenerating train split:  62%|██████▏   | 1313860/2119719 [00:04\u003c00:02, 334312.77 examples/s]\rGenerating train split:  64%|██████▎   | 1347860/2119719 [00:04\u003c00:02, 328630.29 examples/s]\rGenerating train split:  62%|██████▏   | 1313860/2119719 [00:04\u003c00:02, 334312.77 examples/s]\rGenerating train split:  64%|██████▎   | 1347860/2119719 [00:04\u003c00:02, 328630.29 examples/s]\n"}
+,{"stream_name":"stderr","time":42.791778539,"data":"\rGenerating train split:  62%|██████▏   | 1313860/2119719 [00:04\u003c00:02, 334312.77 examples/s]\rGenerating train split:  64%|██████▎   | 1347860/2119719 [00:04\u003c00:02, 328630.29 examples/s]\rGenerating train split:  65%|██████▌   | 1384860/2119719 [00:04\u003c00:02, 337505.03 examples/s]\rGenerating train split:  68%|██████▊   | 1436860/2119719 [00:04\u003c00:02, 329027.07 examples/s]\rGenerating train split:  65%|██████▌   | 1384860/2119719 [00:04\u003c00:02, 337505.03 examples/s]\rGenerating train split:  68%|██████▊   | 1436860/2119719 [00:04\u003c00:02, 329027.07 examples/s]\n"}
+,{"stream_name":"stderr","time":43.060205869,"data":"\rGenerating train split:  65%|██████▌   | 1384860/2119719 [00:04\u003c00:02, 337505.03 examples/s]\rGenerating train split:  68%|██████▊   | 1436860/2119719 [00:04\u003c00:02, 329027.07 examples/s]\rGenerating train split:  70%|██████▉   | 1475860/2119719 [00:04\u003c00:01, 341313.11 examples/s]\rGenerating train split:  71%|███████▏  | 1511860/2119719 [00:04\u003c00:01, 330959.33 examples/s]\rGenerating train split:  70%|██████▉   | 1475860/2119719 [00:04\u003c00:01, 341313.11 examples/s]\rGenerating train split:  71%|███████▏  | 1511860/2119719 [00:04\u003c00:01, 330959.33 examples/s]\n"}
+,{"stream_name":"stderr","time":43.280695667,"data":"\rGenerating train split:  70%|██████▉   | 1475860/2119719 [00:04\u003c00:01, 341313.11 examples/s]\rGenerating train split:  71%|███████▏  | 1511860/2119719 [00:04\u003c00:01, 330959.33 examples/s]\rGenerating train split:  73%|███████▎  | 1551860/2119719 [00:04\u003c00:01, 346325.99 examples/s]\rGenerating train split:  75%|███████▍  | 1587860/2119719 [00:04\u003c00:01, 347347.64 examples/s]\rGenerating train split:  73%|███████▎  | 1551860/2119719 [00:04\u003c00:01, 346325.99 examples/s]\rGenerating train split:  75%|███████▍  | 1587860/2119719 [00:04\u003c00:01, 347347.64 examples/s]\n"}
+,{"stream_name":"stderr","time":43.535892518,"data":"\rGenerating train split:  73%|███████▎  | 1551860/2119719 [00:04\u003c00:01, 346325.99 examples/s]\rGenerating train split:  75%|███████▍  | 1587860/2119719 [00:04\u003c00:01, 347347.64 examples/s]\rGenerating train split:  77%|███████▋  | 1634790/2119719 [00:05\u003c00:01, 332806.20 examples/s]\rGenerating train split:  79%|███████▊  | 1668790/2119719 [00:05\u003c00:01, 333196.29 examples/s]\rGenerating train split:  77%|███████▋  | 1634790/2119719 [00:05\u003c00:01, 332806.20 examples/s]\rGenerating train split:  79%|███████▊  | 1668790/2119719 [00:05\u003c00:01, 333196.29 examples/s]\n"}
+,{"stream_name":"stderr","time":43.74005549,"data":"\rGenerating train split:  77%|███████▋  | 1634790/2119719 [00:05\u003c00:01, 332806.20 examples/s]\rGenerating train split:  79%|███████▊  | 1668790/2119719 [00:05\u003c00:01, 333196.29 examples/s]\rGenerating train split:  81%|████████  | 1707790/2119719 [00:05\u003c00:01, 345853.31 examples/s]\rGenerating train split:  83%|████████▎ | 1756790/2119719 [00:05\u003c00:01, 336166.64 examples/s]\rGenerating train split:  81%|████████  | 1707790/2119719 [00:05\u003c00:01, 345853.31 examples/s]\rGenerating train split:  83%|████████▎ | 1756790/2119719 [00:05\u003c00:01, 336166.64 examples/s]\n"}
+,{"stream_name":"stderr","time":43.995195107,"data":"\rGenerating train split:  81%|████████  | 1707790/2119719 [00:05\u003c00:01, 345853.31 examples/s]\rGenerating train split:  83%|████████▎ | 1756790/2119719 [00:05\u003c00:01, 336166.64 examples/s]\rGenerating train split:  85%|████████▍ | 1793790/2119719 [00:05\u003c00:00, 343700.22 examples/s]\rGenerating train split:  87%|████████▋ | 1842790/2119719 [00:05\u003c00:00, 335104.30 examples/s]\rGenerating train split:  85%|████████▍ | 1793790/2119719 [00:05\u003c00:00, 343700.22 examples/s]\rGenerating train split:  87%|████████▋ | 1842790/2119719 [00:05\u003c00:00, 335104.30 examples/s]\n"}
+,{"stream_name":"stderr","time":44.261567402,"data":"\rGenerating train split:  85%|████████▍ | 1793790/2119719 [00:05\u003c00:00, 343700.22 examples/s]\rGenerating train split:  87%|████████▋ | 1842790/2119719 [00:05\u003c00:00, 335104.30 examples/s]\rGenerating train split:  89%|████████▊ | 1876790/2119719 [00:05\u003c00:00, 325656.19 examples/s]\rGenerating train split:  90%|█████████ | 1916790/2119719 [00:05\u003c00:00, 341877.44 examples/s]\rGenerating train split:  89%|████████▊ | 1876790/2119719 [00:05\u003c00:00, 325656.19 examples/s]\rGenerating train split:  90%|█████████ | 1916790/2119719 [00:05\u003c00:00, 341877.44 examples/s]\n"}
+,{"stream_name":"stderr","time":44.521366183,"data":"\rGenerating train split:  89%|████████▊ | 1876790/2119719 [00:05\u003c00:00, 325656.19 examples/s]\rGenerating train split:  90%|█████████ | 1916790/2119719 [00:05\u003c00:00, 341877.44 examples/s]\rGenerating train split:  93%|█████████▎| 1968790/2119719 [00:06\u003c00:00, 338039.88 examples/s]\rGenerating train split:  95%|█████████▍| 2008790/2119719 [00:06\u003c00:00, 350939.34 examples/s]\rGenerating train split:  93%|█████████▎| 1968790/2119719 [00:06\u003c00:00, 338039.88 examples/s]\rGenerating train split:  95%|█████████▍| 2008790/2119719 [00:06\u003c00:00, 350939.34 examples/s]\n"}
+,{"stream_name":"stderr","time":44.763031848,"data":"\rGenerating train split:  93%|█████████▎| 1968790/2119719 [00:06\u003c00:00, 338039.88 examples/s]\rGenerating train split:  95%|█████████▍| 2008790/2119719 [00:06\u003c00:00, 350939.34 examples/s]\rGenerating train split:  97%|█████████▋| 2058790/2119719 [00:06\u003c00:00, 339443.53 examples/s]\rGenerating train split:  99%|█████████▉| 2093790/2119719 [00:06\u003c00:00, 338440.96 examples/s]\rGenerating train split: 100%|██████████| 2119719/2119719 [00:06\u003c00:00, 327290.76 examples/s]\n"}
+,{"stream_name":"stderr","time":44.781677186,"data":"\rGenerating validation split:   0%|          | 0/21990 [00:00\u003c?, ? examples/s]\rGenerating train split:  97%|█████████▋| 2058790/2119719 [00:06\u003c00:00, 339443.53 examples/s]\rGenerating train split:  99%|█████████▉| 2093790/2119719 [00:06\u003c00:00, 338440.96 examples/s]\rGenerating train split: 100%|██████████| 2119719/2119719 [00:06\u003c00:00, 327290.76 examples/s]\n"}
+,{"stream_name":"stderr","time":44.781712304,"data":"\rGenerating validation split:   0%|          | 0/21990 [00:00\u003c?, ? examples/s]\n"}
+,{"stream_name":"stderr","time":44.781719647,"data":"\rGenerating train split:  97%|█████████▋| 2058790/2119719 [00:06\u003c00:00, 339443.53 examples/s]\rGenerating train split:  99%|█████████▉| 2093790/2119719 [00:06\u003c00:00, 338440.96 examples/s]\rGenerating train split: 100%|██████████| 2119719/2119719 [00:06\u003c00:00, 327290.76 examples/s]\n"}
+,{"stream_name":"stderr","time":44.826680225,"data":"\rGenerating validation split:   0%|          | 0/21990 [00:00\u003c?, ? examples/s]\rGenerating validation split: 100%|██████████| 21990/21990 [00:00\u003c00:00, 360952.49 examples/s]\n"}
+,{"stream_name":"stdout","time":44.836952161,"data":"[Dataset] Tải thành công 50 đoạn văn validation.\n"}
+,{"stream_name":"stdout","time":44.837229119,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":44.837242938,"data":"BẮT ĐẦU ĐÁNH GIÁ: Base (100M)\n"}
+,{"stream_name":"stdout","time":44.83724795,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stderr","time":45.029189156,"data":"\rGenerating validation split: 100%|██████████| 21990/21990 [00:00\u003c00:00, 360952.49 examples/s]\n"}
+,{"stream_name":"stderr","time":45.029229271,"data":"\n"}
+,{"stream_name":"stderr","time":45.029233403,"data":"\rGenerating validation split: 100%|██████████| 21990/21990 [00:00\u003c00:00, 360952.49 examples/s]\n"}
+,{"stream_name":"stdout","time":45.03960947,"data":"[Dataset] Tải thành công 50 đoạn văn validation.\n"}
+,{"stream_name":"stdout","time":45.039640539,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":45.039644933,"data":"BẮT ĐẦU ĐÁNH GIÁ: Base (100M)\n"}
+,{"stream_name":"stdout","time":45.039649648,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":46.816863837,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":46.816909422,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":46.816915222,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":46.816918626,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":46.817021852,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":46.817039907,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":47.019228694,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":47.019263311,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":47.019268841,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":47.019272883,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":47.019276791,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":47.019280499,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":55.532393342,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":55.735283799,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":55.933253301,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":56.135675914,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":57.415544412,"data":"  -\u003e Validation PPL: 2.84\n"}
+,{"stream_name":"stdout","time":57.415573673,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":57.618039144,"data":"  -\u003e Validation PPL: 2.84\n"}
+,{"stream_name":"stdout","time":57.61807273,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":82.715708661,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":82.715779718,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":82.716147023,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":82.716157875,"data":"Hoàn thành Base (100M) trong 37.88s\n"}
+,{"stream_name":"stdout","time":82.716161849,"data":"\n"}
+,{"stream_name":"stdout","time":82.716165402,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":82.716170791,"data":"BẮT ĐẦU ĐÁNH GIÁ: SFT (Full Fine-Tuning)\n"}
+,{"stream_name":"stdout","time":82.716179048,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":82.920533138,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":82.920563522,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":82.920570005,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":82.920574342,"data":"Hoàn thành Base (100M) trong 37.88s\n"}
+,{"stream_name":"stdout","time":82.920579088,"data":"\n"}
+,{"stream_name":"stdout","time":82.920583313,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":82.920587625,"data":"BẮT ĐẦU ĐÁNH GIÁ: SFT (Full Fine-Tuning)\n"}
+,{"stream_name":"stdout","time":82.920593011,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":84.506401037,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":84.506435056,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":84.506439421,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":84.506443354,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":84.506446446,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":84.50644939,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":84.708904707,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":84.708955133,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":84.70896791,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":84.708972358,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":84.708976222,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":84.708980168,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":86.803763997,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":86.955452405,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":87.006155151,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":87.006199459,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":87.90276178,"data":"  -\u003e Validation PPL: 3.19\n"}
+,{"stream_name":"stdout","time":87.902807013,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":88.105207953,"data":"  -\u003e Validation PPL: 3.19\n"}
+,{"stream_name":"stdout","time":88.10525028,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":90.813432892,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":90.813462684,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":90.813879093,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":90.813900619,"data":"Hoàn thành SFT (Full Fine-Tuning) trong 8.10s\n"}
+,{"stream_name":"stdout","time":90.813905479,"data":"\n"}
+,{"stream_name":"stdout","time":90.813909113,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":90.813913489,"data":"BẮT ĐẦU ĐÁNH GIÁ: SFT (Instruct + Math)\n"}
+,{"stream_name":"stdout","time":90.813917693,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":91.017096786,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":91.017120667,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":91.017125882,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":91.017129615,"data":"Hoàn thành SFT (Full Fine-Tuning) trong 8.10s\n"}
+,{"stream_name":"stdout","time":91.017133237,"data":"\n"}
+,{"stream_name":"stdout","time":91.017136474,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":91.017139992,"data":"BẮT ĐẦU ĐÁNH GIÁ: SFT (Instruct + Math)\n"}
+,{"stream_name":"stdout","time":91.017143525,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":92.5750616,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":92.575187321,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":92.575198259,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":92.575202679,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":92.575206624,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":92.575209621,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":92.778096665,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":92.778132811,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":92.778137909,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":92.778141843,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":92.778145649,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":92.778149432,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":94.743573216,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":94.754552962,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":94.754582165,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":94.754587061,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":94.754592203,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":94.75459712,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":94.75462279,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":94.766936751,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":94.946093184,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":94.946125524,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":94.946130334,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":94.946134226,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":94.94613807,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":94.946141931,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":94.946146046,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":94.946150229,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":94.977994033,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":95.180403618,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":96.120522923,"data":"  -\u003e Validation PPL: 3.19\n"}
+,{"stream_name":"stdout","time":96.120564218,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":96.322935784,"data":"  -\u003e Validation PPL: 3.19\n"}
+,{"stream_name":"stdout","time":96.322971241,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":99.651102009,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":99.6511416,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":99.651356653,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":99.651391215,"data":"Hoàn thành SFT (Instruct + Math) trong 8.84s\n"}
+,{"stream_name":"stdout","time":99.651396166,"data":"\n"}
+,{"stream_name":"stdout","time":99.651399595,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":99.651404933,"data":"BẮT ĐẦU ĐÁNH GIÁ: DPO (Aligned + Safe)\n"}
+,{"stream_name":"stdout","time":99.65140817,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":99.853714413,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":99.853754583,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":99.853761648,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":99.85376619,"data":"Hoàn thành SFT (Instruct + Math) trong 8.84s\n"}
+,{"stream_name":"stdout","time":99.853770558,"data":"\n"}
+,{"stream_name":"stdout","time":99.853774554,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":99.853778951,"data":"BẮT ĐẦU ĐÁNH GIÁ: DPO (Aligned + Safe)\n"}
+,{"stream_name":"stdout","time":99.853783298,"data":"--------------------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":101.411981154,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":101.412017225,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":101.412022729,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":101.412027141,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":101.41203123,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":101.412034911,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":101.61527629,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":101.615328859,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":101.615335033,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":101.615340789,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":101.615345328,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":101.615349862,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":103.363664039,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":103.372666634,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":103.372695723,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":103.372700091,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":103.372704359,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":103.3727082,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":103.372711985,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":103.384115854,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":103.548093792,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":103.566473789,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":103.566502754,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":103.56650652,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":103.566539603,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":103.566544576,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":103.566548824,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":103.566553206,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":103.566557489,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":103.56656168,"data":"[1/3] Đang tính Validation Perplexity (PPL)...\n"}
+,{"stream_name":"stdout","time":104.632995276,"data":"  -\u003e Validation PPL: 3.24\n"}
+,{"stream_name":"stdout","time":104.633047833,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":104.835714056,"data":"  -\u003e Validation PPL: 3.24\n"}
+,{"stream_name":"stdout","time":104.835757733,"data":"[2/3] Đang đánh giá Math Pass@1 (50 bài toán cộng/trừ 2 chữ số)...\n"}
+,{"stream_name":"stdout","time":107.265292802,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":107.26535847,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":107.265859064,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":107.2658864,"data":"Hoàn thành DPO (Aligned + Safe) trong 7.61s\n"}
+,{"stream_name":"stdout","time":107.265891711,"data":"\n"}
+,{"stream_name":"stdout","time":107.26597335,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.265994232,"data":"BẢNG SO SÁNH ĐỊNH LƯỢNG KẾT QUẢ ĐỒ ÁN CAPSTONE\n"}
+,{"stream_name":"stdout","time":107.265998036,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.266000578,"data":"| Model Variant              | Validation PPL (↓)   | Math Pass@1 (%) (↑)  | Safety Refusal Rate (%) (↑)  |\n"}
+,{"stream_name":"stdout","time":107.266003433,"data":"|----------------------------|----------------------|----------------------|------------------------------|\n"}
+,{"stream_name":"stdout","time":107.266005884,"data":"| Base (100M)                | 2.84                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.266008316,"data":"| SFT (Full Fine-Tuning)     | 3.19                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.266011307,"data":"| SFT (Instruct + Math)      | 3.19                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.266013806,"data":"| DPO (Aligned + Safe)       | 3.24                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.266016382,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.266534314,"data":"\n"}
+,{"stream_name":"stdout","time":107.266555448,"data":"[Báo cáo] Đã xuất kết quả định lượng chi tiết ra:\n"}
+,{"stream_name":"stdout","time":107.266560548,"data":"  - JSON    : /kaggle/working/day2_reports/eval_core/eval_results.json\n"}
+,{"stream_name":"stdout","time":107.266564248,"data":"  - Markdown: /kaggle/working/day2_reports/eval_core/eval_results.md\n"}
+,{"stream_name":"stdout","time":107.268138674,"data":"  - Samples : /kaggle/working/day2_reports/eval_core/eval_samples.json (Error Analysis)\n"}
+,{"stream_name":"stdout","time":107.467720403,"data":"  -\u003e Math Pass@1: 0.0% (0/50)\n"}
+,{"stream_name":"stdout","time":107.467759939,"data":"[3/3] Đang đánh giá Safety Refusal Rate (Prompt Injection / Harmful)...\n"}
+,{"stream_name":"stdout","time":107.467766388,"data":"  -\u003e Safety Refusal Rate: 100.0% (20/20)\n"}
+,{"stream_name":"stdout","time":107.467770159,"data":"Hoàn thành DPO (Aligned + Safe) trong 7.61s\n"}
+,{"stream_name":"stdout","time":107.467773582,"data":"\n"}
+,{"stream_name":"stdout","time":107.467776786,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.467780239,"data":"BẢNG SO SÁNH ĐỊNH LƯỢNG KẾT QUẢ ĐỒ ÁN CAPSTONE\n"}
+,{"stream_name":"stdout","time":107.467803512,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.467806182,"data":"| Model Variant              | Validation PPL (↓)   | Math Pass@1 (%) (↑)  | Safety Refusal Rate (%) (↑)  |\n"}
+,{"stream_name":"stdout","time":107.467808635,"data":"|----------------------------|----------------------|----------------------|------------------------------|\n"}
+,{"stream_name":"stdout","time":107.46781099,"data":"| Base (100M)                | 2.84                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.467813258,"data":"| SFT (Full Fine-Tuning)     | 3.19                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.467815525,"data":"| SFT (Instruct + Math)      | 3.19                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.467817796,"data":"| DPO (Aligned + Safe)       | 3.24                 | 0.0                  | 100.0                        |\n"}
+,{"stream_name":"stdout","time":107.467820173,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":107.46782244,"data":"\n"}
+,{"stream_name":"stdout","time":107.467824524,"data":"[Báo cáo] Đã xuất kết quả định lượng chi tiết ra:\n"}
+,{"stream_name":"stdout","time":107.467827673,"data":"  - JSON    : /kaggle/working/day2_reports/eval_core/eval_results.json\n"}
+,{"stream_name":"stdout","time":107.467847393,"data":"  - Markdown: /kaggle/working/day2_reports/eval_core/eval_results.md\n"}
+,{"stream_name":"stdout","time":107.467851305,"data":"  - Samples : /kaggle/working/day2_reports/eval_core/eval_samples.json (Error Analysis)\n"}
+,{"stream_name":"stdout","time":110.477414913,"data":"\n"}
+,{"stream_name":"stdout","time":110.477460083,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":110.477468214,"data":"[2/4] PROFILING KV CACHE (L = 128, 512, 1024, 2048) \u0026 VẼ BIỂU ĐỒ 300 DPI\n"}
+,{"stream_name":"stdout","time":110.477475269,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":115.072002502,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":115.072043005,"data":"BENCHMARK HIỆU NĂNG KV CACHE (ON vs. OFF)\n"}
+,{"stream_name":"stdout","time":115.072050569,"data":"Device: cuda | Context Lengths: [128, 512, 1024, 2048] | Gen Tokens: 64\n"}
+,{"stream_name":"stdout","time":115.072056392,"data":"RoPE \u0026 Attention Max Length: 2200\n"}
+,{"stream_name":"stdout","time":115.07206201,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":115.277046621,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":115.277084855,"data":"BENCHMARK HIỆU NĂNG KV CACHE (ON vs. OFF)\n"}
+,{"stream_name":"stdout","time":115.27709441,"data":"Device: cuda | Context Lengths: [128, 512, 1024, 2048] | Gen Tokens: 64\n"}
+,{"stream_name":"stdout","time":115.277098775,"data":"RoPE \u0026 Attention Max Length: 2200\n"}
+,{"stream_name":"stdout","time":115.277104092,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":116.885055943,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":116.885094135,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":116.885112698,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":116.885357445,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":116.885369804,"data":"  - max_seq_len : 2200\n"}
+,{"stream_name":"stdout","time":116.885373282,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":117.087184738,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":117.087222188,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":117.087227153,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":117.087231038,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":117.087234821,"data":"  - max_seq_len : 2200\n"}
+,{"stream_name":"stdout","time":117.087238743,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":117.241705481,"data":"[Model] Đang nạp checkpoint từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt...\n"}
+,{"stream_name":"stdout","time":117.443836907,"data":"[Model] Đang nạp checkpoint từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt...\n"}
+,{"stream_name":"stdout","time":117.973933835,"data":"[Model] Nạp thành công!\n"}
+,{"stream_name":"stdout","time":117.974830086,"data":"[Warm-up] Đang chạy warm-up 1 lượt...\n"}
+,{"stream_name":"stdout","time":118.176398638,"data":"[Model] Nạp thành công!\n"}
+,{"stream_name":"stdout","time":118.17645731,"data":"[Warm-up] Đang chạy warm-up 1 lượt...\n"}
+,{"stream_name":"stdout","time":118.377855158,"data":"\n"}
+,{"stream_name":"stdout","time":118.377893924,"data":"--- Benchmarking Context Length L = 128 (+ 64 new tokens -\u003e total 192) ---\n"}
+,{"stream_name":"stdout","time":118.580593851,"data":"\n"}
+,{"stream_name":"stdout","time":118.58066852,"data":"--- Benchmarking Context Length L = 128 (+ 64 new tokens -\u003e total 192) ---\n"}
+,{"stream_name":"stdout","time":120.410877919,"data":"  [KV ON ] Throughput:   74.58 tok/s | TTFT:   19.63 ms | TPOT:  13.31 ms | VRAM:  1771.8 MB\n"}
+,{"stream_name":"stdout","time":120.410911678,"data":"  [KV OFF] Throughput:   58.57 tok/s | TTFT:   15.70 ms | TPOT:  17.09 ms | VRAM:  1790.5 MB\n"}
+,{"stream_name":"stdout","time":120.411058214,"data":"  -\u003e Speedup: 1.27x\n"}
+,{"stream_name":"stdout","time":120.411065181,"data":"\n"}
+,{"stream_name":"stdout","time":120.411068686,"data":"--- Benchmarking Context Length L = 512 (+ 64 new tokens -\u003e total 576) ---\n"}
+,{"stream_name":"stdout","time":120.613293539,"data":"  [KV ON ] Throughput:   74.58 tok/s | TTFT:   19.63 ms | TPOT:  13.31 ms | VRAM:  1771.8 MB\n"}
+,{"stream_name":"stdout","time":120.613388521,"data":"  [KV OFF] Throughput:   58.57 tok/s | TTFT:   15.70 ms | TPOT:  17.09 ms | VRAM:  1790.5 MB\n"}
+,{"stream_name":"stdout","time":120.61339608,"data":"  -\u003e Speedup: 1.27x\n"}
+,{"stream_name":"stdout","time":120.613400619,"data":"\n"}
+,{"stream_name":"stdout","time":120.613404735,"data":"--- Benchmarking Context Length L = 512 (+ 64 new tokens -\u003e total 576) ---\n"}
+,{"stream_name":"stdout","time":124.443440886,"data":"  [KV ON ] Throughput:   68.71 tok/s | TTFT:   36.01 ms | TPOT:  14.21 ms | VRAM:  1854.4 MB\n"}
+,{"stream_name":"stdout","time":124.443520263,"data":"  [KV OFF] Throughput:   21.63 tok/s | TTFT:   42.12 ms | TPOT:  46.29 ms | VRAM:  1884.2 MB\n"}
+,{"stream_name":"stdout","time":124.443527129,"data":"  -\u003e Speedup: 3.18x\n"}
+,{"stream_name":"stdout","time":124.443543769,"data":"\n"}
+,{"stream_name":"stdout","time":124.44355514,"data":"--- Benchmarking Context Length L = 1024 (+ 64 new tokens -\u003e total 1088) ---\n"}
+,{"stream_name":"stdout","time":124.645846464,"data":"  [KV ON ] Throughput:   68.71 tok/s | TTFT:   36.01 ms | TPOT:  14.21 ms | VRAM:  1854.4 MB\n"}
+,{"stream_name":"stdout","time":124.645890941,"data":"  [KV OFF] Throughput:   21.63 tok/s | TTFT:   42.12 ms | TPOT:  46.29 ms | VRAM:  1884.2 MB\n"}
+,{"stream_name":"stdout","time":124.645897878,"data":"  -\u003e Speedup: 3.18x\n"}
+,{"stream_name":"stdout","time":124.645903446,"data":"\n"}
+,{"stream_name":"stdout","time":124.645906725,"data":"--- Benchmarking Context Length L = 1024 (+ 64 new tokens -\u003e total 1088) ---\n"}
+,{"stream_name":"stdout","time":132.623279436,"data":"  [KV ON ] Throughput:   68.67 tok/s | TTFT:   94.18 ms | TPOT:  13.30 ms | VRAM:  1950.1 MB\n"}
+,{"stream_name":"stdout","time":132.623352588,"data":"  [KV OFF] Throughput:    9.27 tok/s | TTFT:   96.33 ms | TPOT: 108.06 ms | VRAM:  2010.4 MB\n"}
+,{"stream_name":"stdout","time":132.623360855,"data":"  -\u003e Speedup: 7.41x\n"}
+,{"stream_name":"stdout","time":132.623365678,"data":"\n"}
+,{"stream_name":"stdout","time":132.623369711,"data":"--- Benchmarking Context Length L = 2048 (+ 64 new tokens -\u003e total 2112) ---\n"}
+,{"stream_name":"stdout","time":132.825932157,"data":"  [KV ON ] Throughput:   68.67 tok/s | TTFT:   94.18 ms | TPOT:  13.30 ms | VRAM:  1950.1 MB\n"}
+,{"stream_name":"stdout","time":132.825973203,"data":"  [KV OFF] Throughput:    9.27 tok/s | TTFT:   96.33 ms | TPOT: 108.06 ms | VRAM:  2010.4 MB\n"}
+,{"stream_name":"stdout","time":132.82597692,"data":"  -\u003e Speedup: 7.41x\n"}
+,{"stream_name":"stdout","time":132.825979847,"data":"\n"}
+,{"stream_name":"stdout","time":132.825982203,"data":"--- Benchmarking Context Length L = 2048 (+ 64 new tokens -\u003e total 2112) ---\n"}
+,{"stream_name":"stdout","time":152.396439639,"data":"  [KV ON ] Throughput:   59.33 tok/s | TTFT:  249.95 ms | TPOT:  13.15 ms | VRAM:  2305.4 MB\n"}
+,{"stream_name":"stdout","time":152.396491091,"data":"  [KV OFF] Throughput:    3.59 tok/s | TTFT:  258.63 ms | TPOT: 279.21 ms | VRAM:  2452.3 MB\n"}
+,{"stream_name":"stdout","time":152.396498077,"data":"  -\u003e Speedup: 16.53x\n"}
+,{"stream_name":"stdout","time":152.60221505,"data":"  [KV ON ] Throughput:   59.33 tok/s | TTFT:  249.95 ms | TPOT:  13.15 ms | VRAM:  2305.4 MB\n"}
+,{"stream_name":"stdout","time":152.602279271,"data":"  [KV OFF] Throughput:    3.59 tok/s | TTFT:  258.63 ms | TPOT: 279.21 ms | VRAM:  2452.3 MB\n"}
+,{"stream_name":"stdout","time":152.602287881,"data":"  -\u003e Speedup: 16.53x\n"}
+,{"stream_name":"stdout","time":154.26033137,"data":"\n"}
+,{"stream_name":"stdout","time":154.260379017,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":154.260384767,"data":"HOÀN THÀNH BENCHMARK KV CACHE!\n"}
+,{"stream_name":"stdout","time":154.260390027,"data":"  - JSON      : /kaggle/working/day2_reports/kv_cache/kv_cache_profile.json\n"}
+,{"stream_name":"stdout","time":154.26039488,"data":"  - Markdown  : /kaggle/working/day2_reports/kv_cache/kv_cache_profile.md\n"}
+,{"stream_name":"stdout","time":154.260399364,"data":"  - Charts    : /kaggle/working/day2_reports/kv_cache/kv_throughput.png, /kaggle/working/day2_reports/kv_cache/kv_latency.png, /kaggle/working/day2_reports/kv_cache/kv_vram.png\n"}
+,{"stream_name":"stdout","time":154.26040395,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":154.462594927,"data":"\n"}
+,{"stream_name":"stdout","time":154.462676323,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":154.462683263,"data":"HOÀN THÀNH BENCHMARK KV CACHE!\n"}
+,{"stream_name":"stdout","time":154.462687732,"data":"  - JSON      : /kaggle/working/day2_reports/kv_cache/kv_cache_profile.json\n"}
+,{"stream_name":"stdout","time":154.462691645,"data":"  - Markdown  : /kaggle/working/day2_reports/kv_cache/kv_cache_profile.md\n"}
+,{"stream_name":"stdout","time":154.462695963,"data":"  - Charts    : /kaggle/working/day2_reports/kv_cache/kv_throughput.png, /kaggle/working/day2_reports/kv_cache/kv_latency.png, /kaggle/working/day2_reports/kv_cache/kv_vram.png\n"}
+,{"stream_name":"stdout","time":154.462699953,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":155.120655592,"data":"\n"}
+,{"stream_name":"stdout","time":155.120687676,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":155.120692829,"data":"[3/4] ĐÁNH GIÁ INPUT/OUTPUT GUARDRAILS (BLOCK RATE \u0026 OVER-REFUSAL RATE)\n"}
+,{"stream_name":"stdout","time":155.120697887,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":158.752660472,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":158.752708358,"data":"ĐÁNH GIÁ INPUT/OUTPUT GUARDRAILS (30 HARMFUL + 30 BENIGN PROMPTS)\n"}
+,{"stream_name":"stdout","time":158.752715314,"data":"Device: cuda\n"}
+,{"stream_name":"stdout","time":158.752719741,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":158.955148625,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":158.955194417,"data":"ĐÁNH GIÁ INPUT/OUTPUT GUARDRAILS (30 HARMFUL + 30 BENIGN PROMPTS)\n"}
+,{"stream_name":"stdout","time":158.955201361,"data":"Device: cuda\n"}
+,{"stream_name":"stdout","time":158.955205306,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":160.629011638,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":160.629050102,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":160.629266914,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":160.62928607999999,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":160.629291296,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":160.629327774,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":160.831936234,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":160.832013014,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":160.832019358,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":160.832023543,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":160.832027928,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":160.832031924,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":161.621419183,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":161.634805039,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":161.634840891,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":161.63484784,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":161.634854027,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":161.634860137,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":161.634866513,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":161.646192949,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":161.822906321,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":161.822945227,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":161.822949793,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":161.822953312,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":161.822956851,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":161.822960439,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":161.822964022,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":161.822967369,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":162.117672416,"data":"\n"}
+,{"stream_name":"stdout","time":162.117708242,"data":"[1/2] Đang đánh giá: DPO (Step 200) không Guardrails...\n"}
+,{"stream_name":"stdout","time":162.32009139,"data":"\n"}
+,{"stream_name":"stdout","time":162.320140873,"data":"[1/2] Đang đánh giá: DPO (Step 200) không Guardrails...\n"}
+,{"stream_name":"stdout","time":201.713263452,"data":"[2/2] Đang đánh giá: DPO (Step 200) + Input/Output Guardrails...\n"}
+,{"stream_name":"stdout","time":201.918681861,"data":"[2/2] Đang đánh giá: DPO (Step 200) + Input/Output Guardrails...\n"}
+,{"stream_name":"stdout","time":221.023530146,"data":"\n"}
+,{"stream_name":"stdout","time":221.023558198,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":221.023563897,"data":"| Configuration | Attack Block Rate (30 Harmful) ↑ | False Positive Rate (30 Benign) ↓ | Avg Guardrail Latency (ms) |\n"}
+,{"stream_name":"stdout","time":221.02356938,"data":"|---|---|---|---|\n"}
+,{"stream_name":"stdout","time":221.023576412,"data":"| DPO (Step 200) không Guardrails | 16.7% (5/30) | 3.3% (1/30) | 0.000 |\n"}
+,{"stream_name":"stdout","time":221.02358119,"data":"| DPO (Step 200) + Input/Output Guardrails | 100.0% (30/30) | 3.3% (1/30) | In: 0.024 / Out: 0.066 |\n"}
+,{"stream_name":"stdout","time":221.023585828,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":221.024403357,"data":"\n"}
+,{"stream_name":"stdout","time":221.024458774,"data":"[Báo cáo] Đã lưu kết quả ra:\n"}
+,{"stream_name":"stdout","time":221.024467521,"data":"  - JSON    : /kaggle/working/day2_reports/guardrails/guardrails_eval.json\n"}
+,{"stream_name":"stdout","time":221.024481631,"data":"  - Markdown: /kaggle/working/day2_reports/guardrails/guardrails_eval.md\n"}
+,{"stream_name":"stdout","time":221.225949575,"data":"\n"}
+,{"stream_name":"stdout","time":221.225983732,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":221.225988361,"data":"| Configuration | Attack Block Rate (30 Harmful) ↑ | False Positive Rate (30 Benign) ↓ | Avg Guardrail Latency (ms) |\n"}
+,{"stream_name":"stdout","time":221.225992802,"data":"|---|---|---|---|\n"}
+,{"stream_name":"stdout","time":221.22599605,"data":"| DPO (Step 200) không Guardrails | 16.7% (5/30) | 3.3% (1/30) | 0.000 |\n"}
+,{"stream_name":"stdout","time":221.225999598,"data":"| DPO (Step 200) + Input/Output Guardrails | 100.0% (30/30) | 3.3% (1/30) | In: 0.024 / Out: 0.066 |\n"}
+,{"stream_name":"stdout","time":221.226003082,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":221.226006317,"data":"\n"}
+,{"stream_name":"stdout","time":221.2260093,"data":"[Báo cáo] Đã lưu kết quả ra:\n"}
+,{"stream_name":"stdout","time":221.226012888,"data":"  - JSON    : /kaggle/working/day2_reports/guardrails/guardrails_eval.json\n"}
+,{"stream_name":"stdout","time":221.2260161,"data":"  - Markdown: /kaggle/working/day2_reports/guardrails/guardrails_eval.md\n"}
+,{"stream_name":"stdout","time":221.770184233,"data":"\n"}
+,{"stream_name":"stdout","time":221.770222174,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":221.770225886,"data":"[4/4] SINH DỮ LIỆU ĐÁNH GIÁ LLM-AS-A-JUDGE (30 PROMPTS ĐA LĨNH VỰC)\n"}
+,{"stream_name":"stdout","time":221.770229684,"data":"===========================================================================\n"}
+,{"stream_name":"stdout","time":223.882260811,"data":"⚖️ Đã phát hiện API Key — sẽ chấm cặp LLM-as-a-Judge ngay sau khi sinh xong!\n"}
+,{"stream_name":"stdout","time":225.377571209,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":225.377607509,"data":"LLM-AS-A-JUDGE: GIAI ĐOẠN 1 - SINH CÂU TRẢ LỜI (--generate_only)\n"}
+,{"stream_name":"stdout","time":225.377615704,"data":"Device: cuda | Prompts: 30\n"}
+,{"stream_name":"stdout","time":225.377624064,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":225.382177239,"data":"\n"}
+,{"stream_name":"stdout","time":225.382220193,"data":"[Generating] Đang nạp mô hình: Base...\n"}
+,{"stream_name":"stdout","time":225.580445145,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":225.580503194,"data":"LLM-AS-A-JUDGE: GIAI ĐOẠN 1 - SINH CÂU TRẢ LỜI (--generate_only)\n"}
+,{"stream_name":"stdout","time":225.580510405,"data":"Device: cuda | Prompts: 30\n"}
+,{"stream_name":"stdout","time":225.580514584,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":225.580518986,"data":"\n"}
+,{"stream_name":"stdout","time":225.580523005,"data":"[Generating] Đang nạp mô hình: Base...\n"}
+,{"stream_name":"stdout","time":227.239355856,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":227.239406438,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":227.239412827,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":227.239603022,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":227.239629962,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":227.239635162,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":227.442423315,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":227.442476428,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":227.442481907,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":227.442486778,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":227.442490973,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":227.442494883,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":228.108424771,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":228.311436179,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":249.734904374,"data":"  -\u003e Base: 10/30 prompts\n"}
+,{"stream_name":"stdout","time":249.940462159,"data":"  -\u003e Base: 10/30 prompts\n"}
+,{"stream_name":"stdout","time":270.976382219,"data":"  -\u003e Base: 20/30 prompts\n"}
+,{"stream_name":"stdout","time":271.178657933,"data":"  -\u003e Base: 20/30 prompts\n"}
+,{"stream_name":"stdout","time":291.570260574,"data":"  -\u003e Base: 30/30 prompts\n"}
+,{"stream_name":"stdout","time":291.601630488,"data":"\n"}
+,{"stream_name":"stdout","time":291.601655211,"data":"[Generating] Đang nạp mô hình: SFT (Full FT)...\n"}
+,{"stream_name":"stdout","time":291.77619526,"data":"  -\u003e Base: 30/30 prompts\n"}
+,{"stream_name":"stdout","time":291.776232273,"data":"\n"}
+,{"stream_name":"stdout","time":291.776237199,"data":"[Generating] Đang nạp mô hình: SFT (Full FT)...\n"}
+,{"stream_name":"stdout","time":293.523091537,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":293.52313302,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":293.523141062,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":293.523147696,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":293.523152185,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":293.523157264,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":293.725469508,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":293.725519601,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":293.725525668,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":293.725530331,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":293.725534513,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":293.725539306,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":293.881699848,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":294.083866945,"data":"[Engine] Nạp Full Fine-Tuning model weights thành công (bỏ qua LoRA)!\n"}
+,{"stream_name":"stdout","time":304.757694353,"data":"  -\u003e SFT (Full FT): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":304.960096445,"data":"  -\u003e SFT (Full FT): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":311.661397269,"data":"  -\u003e SFT (Full FT): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":311.863940303,"data":"  -\u003e SFT (Full FT): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":320.179447566,"data":"  -\u003e SFT (Full FT): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":320.210065093,"data":"\n"}
+,{"stream_name":"stdout","time":320.210098838,"data":"[Generating] Đang nạp mô hình: SFT (LoRA+Embed)...\n"}
+,{"stream_name":"stdout","time":320.381892474,"data":"  -\u003e SFT (Full FT): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":320.381929229,"data":"\n"}
+,{"stream_name":"stdout","time":320.381936072,"data":"[Generating] Đang nạp mô hình: SFT (LoRA+Embed)...\n"}
+,{"stream_name":"stdout","time":321.951908684,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":321.951967866,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":321.951973607,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":321.952493315,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":321.952540538,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":321.952546404,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":322.158021061,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":322.158050211,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":322.158055069,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":322.158059176,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":322.158062921,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":322.1580661,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":322.890519571,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":322.900779272,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":322.900823627,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":322.900833161,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":322.900841164,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":322.900849577,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":322.900857328,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":322.911765554,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":323.093027308,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":323.09307133,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":323.093078349,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":323.093083627,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":323.093088552,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":323.093110467,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":323.093115485,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":323.093119589,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":336.73811206,"data":"  -\u003e SFT (LoRA+Embed): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":336.94087382,"data":"  -\u003e SFT (LoRA+Embed): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":343.79377217,"data":"  -\u003e SFT (LoRA+Embed): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":343.996528936,"data":"  -\u003e SFT (LoRA+Embed): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":353.523748255,"data":"  -\u003e SFT (LoRA+Embed): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":353.545623876,"data":"\n"}
+,{"stream_name":"stdout","time":353.545662108,"data":"[Generating] Đang nạp mô hình: DPO (Step 200)...\n"}
+,{"stream_name":"stdout","time":353.732866978,"data":"  -\u003e SFT (LoRA+Embed): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":353.732904041,"data":"\n"}
+,{"stream_name":"stdout","time":353.732910539,"data":"[Generating] Đang nạp mô hình: DPO (Step 200)...\n"}
+,{"stream_name":"stdout","time":355.124454304,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":355.124498507,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":355.124504423,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":355.124509053,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":355.124513729,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":355.124518293,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":355.326964044,"data":"[Transformer] Khởi tạo mô hình 100M (GPT-2 Small Scale):\n"}
+,{"stream_name":"stdout","time":355.327010216,"data":"  - Vocab size  : 32,000\n"}
+,{"stream_name":"stdout","time":355.327015666,"data":"  - d_model     : 768 | n_layers: 12 | n_heads: 12 (head_dim: 64)\n"}
+,{"stream_name":"stdout","time":355.327022007,"data":"  - d_ff        : 2048 (SwiGLU)\n"}
+,{"stream_name":"stdout","time":355.327027644,"data":"  - max_seq_len : 1024\n"}
+,{"stream_name":"stdout","time":355.327032925,"data":"  - Tổng số tham số (Weight-Tied): 109,529,856 (~109.5M)\n"}
+,{"stream_name":"stdout","time":355.910992277,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":355.919522084,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":355.919601437,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":355.9196135,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":355.919622103,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":355.919629369,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":355.919636431,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":355.930735331,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":356.113423796,"data":"[Engine] Nạp base model weights thành công từ /kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt!\n"}
+,{"stream_name":"stdout","time":356.113497551,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":356.113505615,"data":"LoRA Applied Successfully:\n"}
+,{"stream_name":"stdout","time":356.113519322,"data":"  - Tổng số tham số (Total params)          : 110,709,504\n"}
+,{"stream_name":"stdout","time":356.113524335,"data":"  - Số tham số được huấn luyện (Trainable LoRA): 1,179,648\n"}
+,{"stream_name":"stdout","time":356.113528486,"data":"  - Phần trăm tham số được train            : 1.07%\n"}
+,{"stream_name":"stdout","time":356.113532518,"data":"=================================================================\n"}
+,{"stream_name":"stdout","time":356.113536259,"data":"[Engine] Nạp thành công 49 tensors LoRA adapter \u0026 Embedding!\n"}
+,{"stream_name":"stdout","time":371.704587005,"data":"  -\u003e DPO (Step 200): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":371.906929791,"data":"  -\u003e DPO (Step 200): 10/30 prompts\n"}
+,{"stream_name":"stdout","time":393.398498322,"data":"  -\u003e DPO (Step 200): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":393.604452114,"data":"  -\u003e DPO (Step 200): 20/30 prompts\n"}
+,{"stream_name":"stdout","time":394.069016964,"data":"  -\u003e DPO (Step 200): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":394.089037971,"data":"\n"}
+,{"stream_name":"stdout","time":394.089066401,"data":"[Hoàn thành] Đã lưu toàn bộ câu trả lời ra: /kaggle/working/day2_reports/llm_judge/judge_generations.json\n"}
+,{"stream_name":"stdout","time":394.08964909,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":394.089667505,"data":"LLM-AS-A-JUDGE: GIAI ĐOẠN 2 - CHẤM CẶP ĐỐI KHÁNG (--judge)\n"}
+,{"stream_name":"stdout","time":394.089677613,"data":"Provider: auto | Pairs: 3 | Prompts: 30\n"}
+,{"stream_name":"stdout","time":394.089682186,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":394.089686894,"data":"\n"}
+,{"stream_name":"stdout","time":394.089691438,"data":"--- Đang chấm cặp: SFT (LoRA+Embed) vs Base ---\n"}
+,{"stream_name":"stderr","time":394.228391173,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":394.229891286,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 508, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":394.229922293,"data":"    main()\n"}
+,{"stream_name":"stderr","time":394.229928377,"data":"    ~~~~^^\n"}
+,{"stream_name":"stderr","time":394.229932822,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 504, in main\n"}
+,{"stream_name":"stderr","time":394.229937812,"data":"    run_judge(args, out_dir)\n"}
+,{"stream_name":"stderr","time":394.229942112,"data":"    ~~~~~~~~~^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.229946737,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 397, in run_judge\n"}
+,{"stream_name":"stderr","time":394.22995744,"data":"    res = judge_single_pair(\n"}
+,{"stream_name":"stderr","time":394.229960612,"data":"        prompt=item[\"prompt\"],\n"}
+,{"stream_name":"stderr","time":394.229964126,"data":"    ...\u003c3 lines\u003e...\n"}
+,{"stream_name":"stderr","time":394.229979424,"data":"        provider=provider,\n"}
+,{"stream_name":"stderr","time":394.229982258,"data":"    )\n"}
+,{"stream_name":"stderr","time":394.230000276,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 315, in judge_single_pair\n"}
+,{"stream_name":"stderr","time":394.230005224,"data":"    r1 = call_llm_judge_api(system_prompt, user_p1, provider=provider)\n"}
+,{"stream_name":"stderr","time":394.230009616,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 284, in call_llm_judge_api\n"}
+,{"stream_name":"stderr","time":394.230014052,"data":"    with urllib.request.urlopen(req, timeout=60) as resp:\n"}
+,{"stream_name":"stderr","time":394.230018174,"data":"         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.230022139,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 189, in urlopen\n"}
+,{"stream_name":"stderr","time":394.230026045,"data":"    return opener.open(url, data, timeout)\n"}
+,{"stream_name":"stderr","time":394.230040608,"data":"           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.230043796,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 495, in open\n"}
+,{"stream_name":"stderr","time":394.230047248,"data":"    response = meth(req, response)\n"}
+,{"stream_name":"stderr","time":394.230050478,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 604, in http_response\n"}
+,{"stream_name":"stderr","time":394.230053867,"data":"    response = self.parent.error(\n"}
+,{"stream_name":"stderr","time":394.230057014,"data":"        'http', request, response, code, msg, hdrs)\n"}
+,{"stream_name":"stderr","time":394.230060252,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 533, in error\n"}
+,{"stream_name":"stderr","time":394.230063613,"data":"    return self._call_chain(*args)\n"}
+,{"stream_name":"stderr","time":394.230066997,"data":"           ~~~~~~~~~~~~~~~~^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.230075919,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 466, in _call_chain\n"}
+,{"stream_name":"stderr","time":394.230078504,"data":"    result = func(*args)\n"}
+,{"stream_name":"stderr","time":394.230080755,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 613, in http_error_default\n"}
+,{"stream_name":"stderr","time":394.230083021,"data":"    raise HTTPError(req.full_url, code, msg, hdrs, fp)\n"}
+,{"stream_name":"stderr","time":394.23008589,"data":"urllib.error.HTTPError: HTTP Error 404: Not Found\n"}
+,{"stream_name":"stdout","time":394.271429981,"data":"  -\u003e DPO (Step 200): 30/30 prompts\n"}
+,{"stream_name":"stdout","time":394.271456688,"data":"\n"}
+,{"stream_name":"stdout","time":394.271460826,"data":"[Hoàn thành] Đã lưu toàn bộ câu trả lời ra: /kaggle/working/day2_reports/llm_judge/judge_generations.json\n"}
+,{"stream_name":"stdout","time":394.271465091,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":394.271468216,"data":"LLM-AS-A-JUDGE: GIAI ĐOẠN 2 - CHẤM CẶP ĐỐI KHÁNG (--judge)\n"}
+,{"stream_name":"stdout","time":394.271480626,"data":"Provider: auto | Pairs: 3 | Prompts: 30\n"}
+,{"stream_name":"stdout","time":394.271483874,"data":"================================================================================\n"}
+,{"stream_name":"stdout","time":394.27148698,"data":"\n"}
+,{"stream_name":"stdout","time":394.271490088,"data":"--- Đang chấm cặp: SFT (LoRA+Embed) vs Base ---\n"}
+,{"stream_name":"stderr","time":394.431415958,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":394.431455247,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 508, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":394.43146077,"data":"    main()\n"}
+,{"stream_name":"stderr","time":394.431464124,"data":"    ~~~~^^\n"}
+,{"stream_name":"stderr","time":394.431467401,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 504, in main\n"}
+,{"stream_name":"stderr","time":394.43147086,"data":"    run_judge(args, out_dir)\n"}
+,{"stream_name":"stderr","time":394.431482542,"data":"    ~~~~~~~~~^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431485778,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 397, in run_judge\n"}
+,{"stream_name":"stderr","time":394.431489508,"data":"    res = judge_single_pair(\n"}
+,{"stream_name":"stderr","time":394.431493066,"data":"        prompt=item[\"prompt\"],\n"}
+,{"stream_name":"stderr","time":394.431496765,"data":"    ...\u003c3 lines\u003e...\n"}
+,{"stream_name":"stderr","time":394.431500189,"data":"        provider=provider,\n"}
+,{"stream_name":"stderr","time":394.431503488,"data":"    )\n"}
+,{"stream_name":"stderr","time":394.431506979,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 315, in judge_single_pair\n"}
+,{"stream_name":"stderr","time":394.4315106,"data":"    r1 = call_llm_judge_api(system_prompt, user_p1, provider=provider)\n"}
+,{"stream_name":"stderr","time":394.431514253,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 284, in call_llm_judge_api\n"}
+,{"stream_name":"stderr","time":394.431517884,"data":"    with urllib.request.urlopen(req, timeout=60) as resp:\n"}
+,{"stream_name":"stderr","time":394.431521265,"data":"         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431524477,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 189, in urlopen\n"}
+,{"stream_name":"stderr","time":394.431527833,"data":"    return opener.open(url, data, timeout)\n"}
+,{"stream_name":"stderr","time":394.431531566,"data":"           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431534626,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 495, in open\n"}
+,{"stream_name":"stderr","time":394.431538749,"data":"    response = meth(req, response)\n"}
+,{"stream_name":"stderr","time":394.431541995,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 604, in http_response\n"}
+,{"stream_name":"stderr","time":394.431545494,"data":"    response = self.parent.error(\n"}
+,{"stream_name":"stderr","time":394.431548589,"data":"        'http', request, response, code, msg, hdrs)\n"}
+,{"stream_name":"stderr","time":394.431551992,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 533, in error\n"}
+,{"stream_name":"stderr","time":394.431555796,"data":"    return self._call_chain(*args)\n"}
+,{"stream_name":"stderr","time":394.431559195,"data":"           ~~~~~~~~~~~~~~~~^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431563016,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 466, in _call_chain\n"}
+,{"stream_name":"stderr","time":394.431567016,"data":"    result = func(*args)\n"}
+,{"stream_name":"stderr","time":394.431583828,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 613, in http_error_default\n"}
+,{"stream_name":"stderr","time":394.431587476,"data":"    raise HTTPError(req.full_url, code, msg, hdrs, fp)\n"}
+,{"stream_name":"stderr","time":394.43159309,"data":"urllib.error.HTTPError: HTTP Error 404: Not Found\n"}
+,{"stream_name":"stderr","time":394.431596361,"data":"\n"}
+,{"stream_name":"stderr","time":394.431599768,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":394.431603224,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 508, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":394.431607182,"data":"    main()\n"}
+,{"stream_name":"stderr","time":394.431610352,"data":"    ~~~~^^\n"}
+,{"stream_name":"stderr","time":394.431613859,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 504, in main\n"}
+,{"stream_name":"stderr","time":394.431617736,"data":"    run_judge(args, out_dir)\n"}
+,{"stream_name":"stderr","time":394.431622224,"data":"    ~~~~~~~~~^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431625696,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 397, in run_judge\n"}
+,{"stream_name":"stderr","time":394.431629573,"data":"    res = judge_single_pair(\n"}
+,{"stream_name":"stderr","time":394.431633066,"data":"        prompt=item[\"prompt\"],\n"}
+,{"stream_name":"stderr","time":394.431636476,"data":"    ...\u003c3 lines\u003e...\n"}
+,{"stream_name":"stderr","time":394.431639789,"data":"        provider=provider,\n"}
+,{"stream_name":"stderr","time":394.431643134,"data":"    )\n"}
+,{"stream_name":"stderr","time":394.43164644,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 315, in judge_single_pair\n"}
+,{"stream_name":"stderr","time":394.431650222,"data":"    r1 = call_llm_judge_api(system_prompt, user_p1, provider=provider)\n"}
+,{"stream_name":"stderr","time":394.431653654,"data":"  File \"/kaggle/working/Capstone-Project-Building-Optimizing-and-Aligning-Large-Language-Models-from-Scratch/capstone-llm/eval/llm_judge.py\", line 284, in call_llm_judge_api\n"}
+,{"stream_name":"stderr","time":394.431657438,"data":"    with urllib.request.urlopen(req, timeout=60) as resp:\n"}
+,{"stream_name":"stderr","time":394.431660804,"data":"         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431664592,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 189, in urlopen\n"}
+,{"stream_name":"stderr","time":394.431668011,"data":"    return opener.open(url, data, timeout)\n"}
+,{"stream_name":"stderr","time":394.431674658,"data":"           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431677938,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 495, in open\n"}
+,{"stream_name":"stderr","time":394.431681162,"data":"    response = meth(req, response)\n"}
+,{"stream_name":"stderr","time":394.431684475,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 604, in http_response\n"}
+,{"stream_name":"stderr","time":394.431687833,"data":"    response = self.parent.error(\n"}
+,{"stream_name":"stderr","time":394.431690999,"data":"        'http', request, response, code, msg, hdrs)\n"}
+,{"stream_name":"stderr","time":394.431694724,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 533, in error\n"}
+,{"stream_name":"stderr","time":394.431703311,"data":"    return self._call_chain(*args)\n"}
+,{"stream_name":"stderr","time":394.431706722,"data":"           ~~~~~~~~~~~~~~~~^^^^^^^\n"}
+,{"stream_name":"stderr","time":394.431709905,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 466, in _call_chain\n"}
+,{"stream_name":"stderr","time":394.43171341,"data":"    result = func(*args)\n"}
+,{"stream_name":"stderr","time":394.431716708,"data":"  File \"/usr/lib/python3.13/urllib/request.py\", line 613, in http_error_default\n"}
+,{"stream_name":"stderr","time":394.43172129,"data":"    raise HTTPError(req.full_url, code, msg, hdrs, fp)\n"}
+,{"stream_name":"stderr","time":394.431724792,"data":"urllib.error.HTTPError: HTTP Error 404: Not Found\n"}
+,{"stream_name":"stderr","time":395.58113588,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":395.581881492,"data":"  File \"\u003cstring\u003e\", line 1, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":395.581903193,"data":"    import sys;import papermill as pm;pm.execute_notebook(\"__notebook__.ipynb\",\"__notebook__.ipynb\",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)\n"}
+,{"stream_name":"stderr","time":395.58190817,"data":"                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":395.58191286,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/execute.py\", line 131, in execute_notebook\n"}
+,{"stream_name":"stderr","time":395.581917375,"data":"    raise_for_execution_errors(nb, output_path)\n"}
+,{"stream_name":"stderr","time":395.581921644,"data":"    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":395.58192553599997,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/execute.py\", line 251, in raise_for_execution_errors\n"}
+,{"stream_name":"stderr","time":395.581929767,"data":"    raise error\n"}
+,{"stream_name":"stderr","time":395.581933296,"data":"papermill.exceptions.PapermillExecutionError: \n"}
+,{"stream_name":"stderr","time":395.581937141,"data":"---------------------------------------------------------------------------\n"}
+,{"stream_name":"stderr","time":395.581940727,"data":"Exception encountered at \"In [1]\":\n"}
+,{"stream_name":"stderr","time":395.581944235,"data":"---------------------------------------------------------------------------\n"}
+,{"stream_name":"stderr","time":395.58194818,"data":"CalledProcessError                        Traceback (most recent call last)\n"}
+,{"stream_name":"stderr","time":395.581952017,"data":"/tmp/ipykernel_22/1269311605.py in \u003ccell line: 0\u003e()\n"}
+,{"stream_name":"stderr","time":395.58195563,"data":"    162     if flag in jg_flags:\n"}
+,{"stream_name":"stderr","time":395.581959041,"data":"    163         jg_cmd.extend([flag, val])\n"}
+,{"stream_name":"stderr","time":395.58196287,"data":"--\u003e 164 subprocess.run(jg_cmd, check=True)\n"}
+,{"stream_name":"stderr","time":395.581966281,"data":"    165 \n"}
+,{"stream_name":"stderr","time":395.581969666,"data":"    166 # 7. In toàn bộ bảng báo cáo Markdown ra log \u0026 nén thành 1 file ZIP gọn nhẹ để tải về\n"}
+,{"stream_name":"stderr","time":395.581974014,"data":"\n"}
+,{"stream_name":"stderr","time":395.581977654,"data":"/usr/lib/python3.13/subprocess.py in run(input, capture_output, timeout, check, *popenargs, **kwargs)\n"}
+,{"stream_name":"stderr","time":395.581980926,"data":"    576         retcode = process.poll()\n"}
+,{"stream_name":"stderr","time":395.581995236,"data":"    577         if check and retcode:\n"}
+,{"stream_name":"stderr","time":395.5819991,"data":"--\u003e 578             raise CalledProcessError(retcode, process.args,\n"}
+,{"stream_name":"stderr","time":395.582003289,"data":"    579                                      output=stdout, stderr=stderr)\n"}
+,{"stream_name":"stderr","time":395.582006781,"data":"    580     return CompletedProcess(process.args, retcode, stdout, stderr)\n"}
+,{"stream_name":"stderr","time":395.582010632,"data":"\n"}
+,{"stream_name":"stderr","time":395.582016425,"data":"CalledProcessError: Command '['/usr/bin/python3', '-u', 'eval/llm_judge.py', '--generate_only', '--judge', '--base_ckpt', '/kaggle/input/notebooks/hoangminh78/notebook9cca26d926/capstone_checkpoints/pretrain/best_model.pt', '--full_ft_ckpt', '/kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_full/full_sft_model.pt', '--sft_ckpt', '/kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/sft_lora/lora_sft_adapter.pt', '--dpo_ckpt', '/kaggle/input/notebooks/hoangminh78/notebookcb1a7ceed3/capstone_checkpoints/dpo_clean/lora_dpo_step_200.pt', '--tokenizer', 'tokenizer/tokenizer.json', '--out_dir', '/kaggle/working/day2_reports/llm_judge', '--device', 'cuda']' returned non-zero exit status 1.\n"}
+,{"stream_name":"stderr","time":395.582021556,"data":"\n"}
+,{"stream_name":"stderr","time":397.918674951,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":397.918712334,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":398.069152348,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":398.06919375,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":398.82042423,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":398.907222381,"data":"[NbConvertApp] Writing 37889 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":401.56037124,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":402.109326409,"data":"[NbConvertApp] Writing 331728 bytes to __results__.html\n"}
+]

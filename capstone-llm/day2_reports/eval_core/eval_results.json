@@ -1,0 +1,22 @@
+{
+  "Base (100M)": {
+    "validation_ppl": 2.84,
+    "math_pass1_pct": 0.0,
+    "safety_refusal_rate_pct": 100.0
+  },
+  "SFT (Full Fine-Tuning)": {
+    "validation_ppl": 3.19,
+    "math_pass1_pct": 0.0,
+    "safety_refusal_rate_pct": 100.0
+  },
+  "SFT (Instruct + Math)": {
+    "validation_ppl": 3.19,
+    "math_pass1_pct": 0.0,
+    "safety_refusal_rate_pct": 100.0
+  },
+  "DPO (Aligned + Safe)": {
+    "validation_ppl": 3.24,
+    "math_pass1_pct": 0.0,
+    "safety_refusal_rate_pct": 100.0
+  }
+}
